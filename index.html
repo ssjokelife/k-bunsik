@@ -41,6 +41,9 @@ button.on { border-color:var(--gold); color:var(--gold); }
 .news { position:fixed; top:12px; left:50%; transform:translateX(-50%); background:#2c2418; border:2px solid var(--gold); color:var(--gold); border-radius:12px; padding:10px 18px; z-index:30; font-size:15px; max-width:90%; text-align:center; display:none; }
 .tag { font-size:12px; color:var(--dim); }
 .grp { width:100%; font-size:12px; color:var(--dim); margin:8px 2px 0; border-bottom:1px solid #33333d; padding-bottom:3px; }
+#rankbar { background:#1f2430; border:1px solid #3a4356; border-radius:10px; padding:7px 12px;
+  margin:6px 0; font-size:13px; color:#b8c4de; cursor:pointer; display:none; }
+#rankbar b { color:var(--gold); }
 #hint { background:#2c2418; border-left:4px solid var(--gold); border-radius:0 10px 10px 0; padding:8px 12px; margin:6px 0; font-size:13.5px; color:var(--gold); }
 #pauseOv { position:fixed; inset:0; background:rgba(0,0,0,.82); display:none; align-items:center; justify-content:center; flex-direction:column; z-index:40; }
 #pauseOv h2 { color:#fff; } #pauseOv button { background:var(--accent); color:#fff; border:0; font-size:18px; padding:14px 40px; }
@@ -54,6 +57,7 @@ button.on { border-color:var(--gold); color:var(--gold); }
 <h1>🍢 K-분식집 <span class="tag">영업일지 — 방과후 스튜디오</span></h1>
 <div class="bar" id="topbar"></div>
 <div class="bar" id="statbar"></div>
+<div id="rankbar" onclick="showBoard()"></div>
 <div id="hint" style="display:none"></div>
 <div class="queue" id="queue"></div>
 <div id="passerbyBox" class="grid"></div>
@@ -808,6 +812,35 @@ window.submitScore = async () => {
     else { const t = await r.text(); log('순위표 제출 실패 (' + r.status + ') — 서버 준비 중이거나 오류: ' + t.slice(0, 80), 'b'); }
   } catch (e) { log('순위표 서버에 연결 못 함 — 오프라인?', 'b'); }
 };
+
+// 🏆 실시간 랭킹 바: 내 순자산이 지금 몇 위인지 + 다음 순위까지 남은 금액
+let boardCache = null;
+async function refreshBoard() {
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/scores?select=nickname,asset&season=eq.1&order=asset.desc.nullslast&limit=10', {
+      headers: { ...SB_HDR, 'Accept-Profile': 'bunsik' },
+    });
+    if (r.ok) boardCache = await r.json();
+  } catch (e) { /* 오프라인 — 기존 캐시 유지 */ }
+}
+function renderRankbar() {
+  const el = document.getElementById('rankbar');
+  if (!el) return;
+  const rows = [...(boardCache || []), { nickname: '🤖 AI 사장', asset: 12500000 }]
+    .sort((a, b) => b.asset - a.asset);
+  const my = assetValue();
+  let rank = rows.findIndex(r => my >= r.asset);
+  if (rank === -1) rank = rows.length;
+  const ahead = rank > 0 ? rows[rank - 1] : null;
+  const myRank = rank + 1;
+  el.style.display = 'block';
+  el.innerHTML = myRank === 1
+    ? `🏆 <b>현재 1위!</b> (내 순자산 ${fmt(my)}) — 2위 ${rows[0] ? rows[0].nickname : ''}와 ${fmt(my - (rows[0]?.asset ?? 0))} 차이 · <span class="tag">탭=전체 순위</span>`
+    : `🏆 지금 마감하면 <b>${myRank}위</b> (${fmt(my)}) — ${rank}위 <b>${ahead.nickname}</b>까지 <b>+${fmt(ahead.asset - my)}</b> · <span class="tag">탭=전체 순위</span>`;
+}
+refreshBoard();
+setInterval(refreshBoard, 60000);
+setInterval(renderRankbar, 3000);
 
 window.showBoard = async () => {
   try {
