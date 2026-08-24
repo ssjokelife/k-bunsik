@@ -7,23 +7,56 @@
 <style>
 :root { --bg:#1a1a20; --card:#26262e; --ink:#e8e4da; --dim:#9a958a; --accent:#e8734f; --good:#7fd18a; --bad:#e88a7a; --gold:#ecc94b; }
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-body { margin:0; background:var(--bg); color:var(--ink); font-family:'Malgun Gothic',sans-serif; max-width:560px; margin:0 auto; padding:8px; padding-bottom:40vh; }
+body { margin:0 auto; background:var(--bg); color:var(--ink); font-family:'Malgun Gothic',sans-serif; max-width:560px; padding:8px 8px 40vh;
+  transition: background 1.2s; }
+body.ph-dawn { background:#232038; } body.ph-open { background:#1e2836; } body.ph-rush { background:#33231d; }
+body.ph-evening { background:#2c2030; } body.ph-night { background:#15151c; }
+@media (min-width: 980px) {
+  body { display:grid; grid-template-columns: 520px minmax(340px, 480px); gap:0 18px; max-width:1040px; padding-bottom:20px; align-content:start; }
+  body > * { grid-column: 1; }
+  #log { grid-column: 2; grid-row: 2 / span 30; height: calc(100vh - 60px); position: sticky; top: 10px; }
+  h1 { grid-column: 1 / span 2; }
+}
 h1 { font-size:18px; margin:6px 4px; color:var(--accent); }
 .bar { display:flex; gap:6px; flex-wrap:wrap; align-items:center; background:var(--card); border-radius:12px; padding:8px 12px; margin-bottom:8px; font-size:14px; }
 .bar b { color:var(--gold); }
 .meter { height:8px; border-radius:4px; background:#111; overflow:hidden; width:70px; display:inline-block; vertical-align:middle; }
 .meter i { display:block; height:100%; background:var(--good); transition:width .3s; }
-.queue { display:flex; gap:6px; overflow-x:auto; padding:4px 0; min-height:88px; }
-.cust { background:var(--card); border-radius:10px; padding:8px 10px; min-width:96px; font-size:13px; border:2px solid transparent; flex:0 0 auto; }
-.cust.match { border-color:var(--good); cursor:pointer; animation:pulse 1s infinite; }
-@keyframes pulse { 50% { transform:scale(1.03); } }
-.cust .pat { height:6px; background:#111; border-radius:3px; margin-top:6px; overflow:hidden; }
+#scene { position:relative; border-radius:16px; overflow:hidden; margin:6px 0;
+  background:linear-gradient(var(--sky1,#3a5a80), var(--sky2,#7a95b5) 70%, #6b5b45 70%, #57493a);
+  transition: background 1.2s; box-shadow: inset 0 -4px 12px rgba(0,0,0,.3); }
+body.ph-dawn #scene { --sky1:#3a3560; --sky2:#c98a6a; } body.ph-open #scene { --sky1:#3a6ea5; --sky2:#9cc0dd; }
+body.ph-rush #scene { --sky1:#c07840; --sky2:#e8b06a; } body.ph-evening #scene { --sky1:#7a4a6a; --sky2:#e09a70; }
+body.ph-night #scene { --sky1:#181830; --sky2:#353555; }
+#scene .awning { height:16px; background:repeating-linear-gradient(90deg, #d95f3b 0 22px, #f4ead6 22px 44px); border-bottom:2px solid rgba(0,0,0,.25); }
+#scene .signname { position:absolute; top:22px; right:10px; font-size:12px; color:rgba(255,255,255,.75);
+  background:rgba(0,0,0,.25); padding:2px 8px; border-radius:8px; }
+.queue { display:flex; gap:8px; overflow-x:auto; padding:12px 10px 10px; min-height:108px; align-items:flex-end; }
+.cust { text-align:center; min-width:76px; flex:0 0 auto; cursor:default; filter:drop-shadow(0 3px 3px rgba(0,0,0,.35)); animation:walkin .45s ease-out; }
+@keyframes walkin { from { transform:translateX(40px); opacity:0; } }
+.cust .face { font-size:34px; line-height:1.1; }
+.cust .bubble { background:#fff; color:#333; border-radius:10px; padding:3px 7px; font-size:12.5px; margin-bottom:4px;
+  position:relative; box-shadow:0 2px 4px rgba(0,0,0,.25); white-space:nowrap; }
+.cust .bubble:after { content:''; position:absolute; bottom:-5px; left:50%; margin-left:-5px;
+  border:5px solid transparent; border-top-color:#fff; border-bottom:0; }
+.cust.match { cursor:pointer; animation:hop .6s infinite; }
+.cust.match .bubble { background:var(--good); color:#fff; } .cust.match .bubble:after { border-top-color:var(--good); }
+@keyframes hop { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
+.cust .pat { height:5px; background:rgba(0,0,0,.4); border-radius:3px; margin-top:4px; overflow:hidden; }
 .cust .pat i { display:block; height:100%; background:var(--good); }
+.cust .nm { font-size:11px; color:rgba(255,255,255,.9); text-shadow:0 1px 2px rgba(0,0,0,.6); }
+.fx { position:absolute; font-weight:bold; font-size:17px; pointer-events:none; z-index:5;
+  animation:floatup 1.1s ease-out forwards; text-shadow:0 2px 3px rgba(0,0,0,.5); }
+@keyframes floatup { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(-46px); } }
+@keyframes shake { 0%,100% { transform:translateX(0); } 25% { transform:translateX(-5px); } 75% { transform:translateX(5px); } }
+body.shaking { animation:shake .3s 2; }
 .grid { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; }
-button { background:var(--card); color:var(--ink); border:1px solid #3a3a44; border-radius:10px; padding:10px 12px; font-size:14px; font-family:inherit; cursor:pointer; }
-button:active { transform:scale(.96); }
+button { background:linear-gradient(#2f2f3a, #23232c); color:var(--ink); border:1px solid #454552;
+  border-bottom:3px solid #17171d; border-radius:12px; padding:10px 12px; font-size:14px; font-family:inherit;
+  cursor:pointer; box-shadow:0 2px 5px rgba(0,0,0,.35); }
+button:active { transform:translateY(2px); border-bottom-width:1px; box-shadow:0 0 2px rgba(0,0,0,.3); }
 button:disabled { opacity:.35; }
-button.hot { background:var(--accent); color:#fff; border:0; font-weight:bold; }
+button.hot { background:linear-gradient(#f08a5e, #d95f3b); color:#fff; border:0; border-bottom:3px solid #a03e22; font-weight:bold; }
 button.on { border-color:var(--gold); color:var(--gold); }
 #hand { font-size:14px; margin:4px; color:var(--gold); min-height:20px; }
 #log { background:#111116; border-radius:12px; padding:10px 12px; height:34vh; overflow-y:auto; font-size:13.5px; line-height:1.75; }
@@ -59,7 +92,7 @@ button.on { border-color:var(--gold); color:var(--gold); }
 <div class="bar" id="statbar"></div>
 <div id="rankbar" onclick="showBoard()"></div>
 <div id="hint" style="display:none"></div>
-<div class="queue" id="queue"></div>
+<div id="scene"><div class="awning"></div><div class="signname">🍢 K-분식</div><div class="queue" id="queue"></div></div>
 <div id="passerbyBox" class="grid"></div>
 <div id="hand"></div>
 <div class="grid" id="stations"></div>
@@ -189,6 +222,45 @@ try { const sv = JSON.parse(localStorage.getItem('bunsik_v3')||'null'); if (sv &
 S.queue = []; S.passerby = null; S.hand = null;   // 휘발 상태는 리셋
 S.staffList = (S.staffList || []).map(st => Object.assign({ wage: 41000, owed: 0, glowStart: null, hiredDay: 1 }, st));   // 구버전 저장 마이그레이션
 
+// ═══════════════ 🔊 사운드 (신스 합성 — 에셋 불필요) & 연출 ═══════════════
+let AC = null;
+let muted = localStorage.getItem('bunsik_mute') === '1';
+document.addEventListener('pointerdown', () => {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+}, { once: true });
+function beep(freq, dur, type, vol, delay) {
+  if (muted || !AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type || 'square'; o.frequency.value = freq;
+  const t = AC.currentTime + (delay || 0);
+  g.gain.setValueAtTime(vol || 0.04, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(AC.destination);
+  o.start(t); o.stop(t + dur);
+}
+const SFX = {
+  tap:  () => beep(660, 0.05, 'square', 0.025),
+  good: () => { beep(880, 0.07, 'square', 0.03); beep(1320, 0.09, 'square', 0.025, 0.06); },
+  coin: () => { beep(988, 0.06, 'triangle', 0.05); beep(1319, 0.1, 'triangle', 0.05, 0.06); },
+  bad:  () => beep(160, 0.22, 'sawtooth', 0.035),
+  bell: () => { beep(1568, 0.25, 'triangle', 0.05); beep(2093, 0.35, 'triangle', 0.035, 0.06); },
+  news: () => { beep(523, 0.09, 'square', 0.03); beep(659, 0.12, 'square', 0.03, 0.12); },
+};
+window.toggleMute = () => { muted = !muted; localStorage.setItem('bunsik_mute', muted ? '1' : '0'); render(); };
+function fx(text, color) {
+  const scene = document.getElementById('scene');
+  if (!scene) return;
+  const e = document.createElement('div');
+  e.className = 'fx';
+  e.textContent = text;
+  e.style.color = color || 'var(--gold)';
+  e.style.left = (25 + Math.random() * 50) + '%';
+  e.style.top = (30 + Math.random() * 25) + '%';
+  scene.appendChild(e);
+  setTimeout(() => e.remove(), 1150);
+}
+function shake() { document.body.classList.add('shaking'); setTimeout(() => document.body.classList.remove('shaking'), 700); }
+
 // ═══════════════ 📜 의사결정 기록계 — 언제, 어떤 상황에서, 무엇을 선택했나 ═══════════════
 if (!S.decisions) S.decisions = [];
 function D(action, detail) {
@@ -213,6 +285,7 @@ function log(msg, cls) {
   logEl.scrollTop = logEl.scrollHeight;
 }
 function news(msg) { const n = $('news'); n.textContent = msg; n.style.display = 'block';
+  SFX.news(); shake();
   clearTimeout(news._t); news._t = setTimeout(() => n.style.display = 'none', 5000); log('📰 ' + msg, 'y'); }
 function save() { localStorage.setItem('bunsik_v3', JSON.stringify(S)); }
 const rnd = a => a[Math.floor(Math.random()*a.length)];
@@ -275,7 +348,7 @@ function miniTap() {
   const pos = mini.t;   // 0..1 왕복 위치
   const err = Math.abs(pos-.5);
   let sc, txt;
-  if (err <= mini.zone/2) { sc=1; txt='완벽! ⭐'; } else if (err <= mini.zone*1.2) { sc=.6; txt='좋아!'; } else { sc=.2; txt='이런…'; }
+  if (err <= mini.zone/2) { sc=1; txt='완벽! ⭐'; SFX.good(); } else if (err <= mini.zone*1.2) { sc=.6; txt='좋아!'; SFX.tap(); } else { sc=.2; txt='이런…'; SFX.bad(); }
   mini.scores.push(sc); mini.round++;
   $('miniFb').textContent = txt;
   if (mini.round >= mini.total) {
@@ -315,6 +388,8 @@ function serve(i) {
   } else if (S.regulars[c.name]) { S.regulars[c.name].visits++; }
   let react = QUAL.react[q-1]; if (q===3) react = react.replace('%s', c.order.name);
   log(`💰 ${c.name}: "${react}" +${fmt(price)}${tip?` 잔돈+${tip}`:''}${cb?` 콤보+${cb}`:''}${S.combo>=2?` 🔥x${S.combo}`:''}`, 'g');
+  SFX.coin(); fx('+' + fmt(gross - fee), q === 3 ? '#ffd700' : '#aef0b8');
+  if (S.combo >= 3) fx('🔥 x' + S.combo, '#ff9a5a');
   S.queue.splice(i,1); S.hand = null;
   if (++S.servesSinceStain >= 3 && S.dirt < 6) { S.servesSinceStain = 0; S.dirt++; log('🧹 바닥에 얼룩이 생겼다… (' + S.dirt + '개)', 'd'); }
   render();
@@ -440,6 +515,8 @@ function endEvent() {
 function isOpen() { return ['open','rush','evening'].includes(S.phase); }
 function setPhase(p) {
   S.phase = p; S.phaseLeft = T[p];
+  document.body.className = document.body.className.replace(/ph-\w+/g, '').trim();
+  document.body.classList.add('ph-' + p);
   const names = { dawn:'🌅 새벽 — 준비 시간', open:'☀️ 영업 중', rush:'🔔 하교 러시!', evening:'🌆 저녁 — 언제 닫을까', night:'🌙 마감' };
   log(`━━ ${names[p]} ━━`, 'y');
   if (p==='rush') news('🔔 하교 시간! 손님 러시!');
@@ -462,6 +539,7 @@ function setPhase(p) {
   render();
 }
 function ringBell() {
+  SFX.bell();
   if (S.phase==='dawn') {
     if (S.construction) { log('🗏 공사 중이라 문을 열 수 없다 — [공사 감독하며 하루 보내기]', 'b'); doNight(); return; }
     if (S.suspension > 0) { log('⛔ 영업정지 처분 중… 문을 열 수 없다. 반성의 하루', 'b'); doNight(); return; }
@@ -711,9 +789,12 @@ function render() {
     <span style="margin-left:auto" class="tag">${POLICY[S.policy].name}·${STYLES[S.style].name}</span>`;
   $('queue').innerHTML = S.queue.map((c,i) => {
     const match = S.hand && S.hand.id===c.order.id;
-    return `<div class="cust ${match?'match':''}" onclick="serve(${i})">${c.reg?'💜':''}${c.gender==='M'?'👦':'👧'} ${c.name}<br>${c.order.emoji} ${c.order.name}${match?'<br><b>👉 서빙!</b>':''}
+    return `<div class="cust ${match?'match':''}" onclick="serve(${i})">
+      <div class="bubble">${c.order.emoji} ${c.order.name}${match?' 👉탭!':'!'}</div>
+      <div class="face">${c.gender==='M'?'👦':'👧'}</div>
+      <div class="nm">${c.reg?'💜':''}${c.name}</div>
       <div class="pat"><i style="width:${c.pat/c.max*100}%;background:${c.pat<10?'#e88a7a':'#7fd18a'}"></i></div></div>`;
-  }).join('') || '<span class="tag" style="padding:20px">손님 없음' + (isOpen()?' — 곧 옵니다':'') + '</span>';
+  }).join('') || `<span class="tag" style="padding:26px 20px;color:rgba(255,255,255,.7)">${isOpen()?'손님을 기다리는 중…':'🌙 영업 전'}</span>`;
   $('passerbyBox').innerHTML = S.passerby ? `<button class="hot" onclick="A_giveFlyer()">🚶 ${S.passerby.gender==='M'?'👦':'👧'} ${S.passerby.name} 학생이 지나간다! ${S.flyers>0&&!S.hand?'📣 전단지 주기':'(전단지 없음/손 참)'}</button>` : '';
   $('hand').textContent = S.hand ? `🤲 들고 있음: ${menuById(S.hand.id).emoji} ${'⭐'.repeat(S.hand.q)} — 주문 맞는 손님을 탭!` : '';
   $('stations').innerHTML = MENUS.map(m => S.unlocked[m.id]
@@ -732,6 +813,7 @@ function render() {
     <div class="grp">⏰ 하루</div>
     <button class="hot" onclick="A.bell()">🔔 ${S.phase==='dawn'?'개점':'마감'} 종</button>
     <button onclick="togglePause()">⏸ 일시정지</button>
+    <button onclick="toggleMute()">${muted?'🔇':'🔊'}</button>
     <button class="${window.SPEED>1?'on':''}" onclick="window.SPEED=window.SPEED>=3?1:window.SPEED+1;render()">⏩ 배속 ×${window.SPEED||1}</button>
     ${S.phase==='dawn' ? '<button onclick="A.dayoff()">😴 오늘 휴업</button>' : ''}
     ${S.phase==='dawn' ? '<div class="grp">🌅 새벽 준비 (지금만!)</div>' + MENUS.filter(m=>S.unlocked[m.id]).map(m=>`<button onclick="A.prep('${m.id}')">🔪 ${m.name} 손질</button>`).join('') : ''}
@@ -901,6 +983,7 @@ function gameTick(dt) {
     for (let i=S.queue.length-1; i>=0; i--) {
       const c = S.queue[i]; c.pat -= dt;
       if (c.pat <= 0) {
+        SFX.bad(); fx('💢 ' + c.name + ' 놓침!', '#ff8a7a');
         if (c.reg) { log(`💔 단골 ${c.name}을(를) 놓쳤다!! "여기 변했네…" (단골 이탈, 평판 -5)`, 'b');
           delete S.regulars[c.name]; S.rep=Math.max(0,S.rep-5); }
         else { log(`💢 ${c.name} 학생이 화나서 가버렸다! (콤보 끊김, 평판 -3)`, 'b'); S.rep=Math.max(0,S.rep-3); }
