@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>🍢 K-분식집 — 영업일지</title>
+<style>
+:root { --bg:#1a1a20; --card:#26262e; --ink:#e8e4da; --dim:#9a958a; --accent:#e8734f; --good:#7fd18a; --bad:#e88a7a; --gold:#ecc94b; }
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body { margin:0; background:var(--bg); color:var(--ink); font-family:'Malgun Gothic',sans-serif; max-width:560px; margin:0 auto; padding:8px; padding-bottom:40vh; }
+h1 { font-size:18px; margin:6px 4px; color:var(--accent); }
+.bar { display:flex; gap:6px; flex-wrap:wrap; align-items:center; background:var(--card); border-radius:12px; padding:8px 12px; margin-bottom:8px; font-size:14px; }
+.bar b { color:var(--gold); }
+.meter { height:8px; border-radius:4px; background:#111; overflow:hidden; width:70px; display:inline-block; vertical-align:middle; }
+.meter i { display:block; height:100%; background:var(--good); transition:width .3s; }
+.queue { display:flex; gap:6px; overflow-x:auto; padding:4px 0; min-height:88px; }
+.cust { background:var(--card); border-radius:10px; padding:8px 10px; min-width:96px; font-size:13px; border:2px solid transparent; flex:0 0 auto; }
+.cust.match { border-color:var(--good); cursor:pointer; animation:pulse 1s infinite; }
+@keyframes pulse { 50% { transform:scale(1.03); } }
+.cust .pat { height:6px; background:#111; border-radius:3px; margin-top:6px; overflow:hidden; }
+.cust .pat i { display:block; height:100%; background:var(--good); }
+.grid { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; }
+button { background:var(--card); color:var(--ink); border:1px solid #3a3a44; border-radius:10px; padding:10px 12px; font-size:14px; font-family:inherit; cursor:pointer; }
+button:active { transform:scale(.96); }
+button:disabled { opacity:.35; }
+button.hot { background:var(--accent); color:#fff; border:0; font-weight:bold; }
+button.on { border-color:var(--gold); color:var(--gold); }
+#hand { font-size:14px; margin:4px; color:var(--gold); min-height:20px; }
+#log { background:#111116; border-radius:12px; padding:10px 12px; height:34vh; overflow-y:auto; font-size:13.5px; line-height:1.75; }
+#log .d { color:var(--dim); } #log .g { color:var(--good); } #log .b { color:var(--bad); } #log .y { color:var(--gold); }
+#mini { position:fixed; inset:0; background:rgba(0,0,0,.75); display:none; align-items:center; justify-content:center; flex-direction:column; z-index:10; }
+#mini .track { width:82%; max-width:420px; height:34px; background:#222; border-radius:17px; position:relative; overflow:hidden; }
+#mini .zone { position:absolute; top:0; height:100%; background:rgba(127,209,138,.45); }
+#mini .cur { position:absolute; top:-4px; width:8px; height:42px; background:var(--gold); border-radius:4px; }
+#mini .tap { margin-top:26px; width:150px; height:150px; border-radius:50%; background:var(--accent); border:0; color:#fff; font-size:22px; font-weight:bold; }
+#mini h2 { color:#fff; } #mini .fb { height:28px; color:var(--gold); font-size:18px; margin-top:10px; }
+#ledger { position:fixed; inset:0; background:rgba(0,0,0,.8); display:none; align-items:center; justify-content:center; z-index:20; }
+#ledger .paper { background:#f7f1e3; color:#333; border-radius:14px; padding:22px 26px; width:86%; max-width:400px; font-size:15px; line-height:1.9; }
+#ledger h2 { color:#c05a46; margin-top:0; }
+#ledger button { width:100%; margin-top:10px; background:var(--accent); color:#fff; border:0; }
+.news { position:fixed; top:12px; left:50%; transform:translateX(-50%); background:#2c2418; border:2px solid var(--gold); color:var(--gold); border-radius:12px; padding:10px 18px; z-index:30; font-size:15px; max-width:90%; text-align:center; display:none; }
+.tag { font-size:12px; color:var(--dim); }
+</style>
+</head>
+<body>
+<h1>🍢 K-분식집 <span class="tag">영업일지 — 방과후 스튜디오</span></h1>
+<div class="bar" id="topbar"></div>
+<div class="bar" id="statbar"></div>
+<div class="queue" id="queue"></div>
+<div id="passerbyBox" class="grid"></div>
+<div id="hand"></div>
+<div class="grid" id="stations"></div>
+<div class="grid" id="actions"></div>
+<div id="log"></div>
+<div id="mini"><h2 id="miniTitle"></h2><div class="track"><div class="zone" id="zone"></div><div class="cur" id="cur"></div></div><div class="fb" id="miniFb"></div><button class="tap" id="tapBtn">탭!</button></div>
+<div id="ledger"><div class="paper" id="ledgerBody"></div></div>
+<div class="news" id="news"></div>
+
+<script>
+// ═══════════════ 규칙 (design.json 이식 — 로블록스판과 동일 수치) ═══════════════
+// 💴 2026년 지방 소도시 실물가 모델 — 판매가는 지방 시세, 최저임금은 전국 동일 (자영업의 방정식)
+const MENUS = [
+  { id:'tteok',  name:'떡볶이', emoji:'🍲', rounds:3, price:3000, unlock:0 },
+  { id:'eomuk',  name:'어묵',   emoji:'🍢', rounds:2, price:700,  unlock:150000 },
+  { id:'gimbap', name:'김밥',   emoji:'🍙', rounds:3, price:2800, unlock:350000 },
+];
+const ING = { tteok:{name:'떡·소스',cost:1000}, eomuk:{name:'어묵 꼬치',cost:250}, gimbap:{name:'김밥 재료',cost:1100} };
+const fmt = n => n.toLocaleString('ko-KR') + '원';
+const QUAL = { mul:[1,1.3,1.6], tip:[0,.15,.3], react:['😌 잘 먹었습니다','😋 맛있어요!','🤩 인생 %s!'] };
+const POLICY = {
+  cheap:{name:'😊 착한가격',mul:.8,gap:.75,pat:5,tip:0}, normal:{name:'🙂 보통',mul:1,gap:1,pat:0,tip:0},
+  premium:{name:'💎 프리미엄',mul:1.2,gap:1.3,pat:-5,tip:.1} };
+const POLICY_ORDER = ['cheap','normal','premium'];
+const STYLES = { neat:{name:'👔 단정',g:'all',b:.06}, hip:{name:'🧢 힙합',g:'M',b:.12}, idol:{name:'✨ 아이돌',g:'F',b:.12} };
+const STYLE_ORDER = ['neat','hip','idol'];
+const T = { dawn:75, open:150, rush:75, evening:75, night:8 };
+const NAMES_M = ['서준','민재','예준','도윤','시우','건우','지호','은우','현우','민준','선우','정우','재윤','태양','호준','다온'];
+const NAMES_F = ['다은','소율','가은','서연','예은','하윤','지아','서아','아린','유나','채원','수아','민서','예린','시은','봄이'];
+const UPGRADES = [
+  { id:'awning', name:'주황 차양', cost:80000,  desc:'대기석 +1' },
+  { id:'deco',   name:'풍선 장식', cost:120000, desc:'팁 확률 +20%p' },
+  { id:'table1', name:'간이 테이블', cost:150000, desc:'인내심 +10초' },
+  { id:'sign',   name:'네온 간판', cost:350000, desc:'손님 간격 -20%' },
+  { id:'stove2', name:'조리대 화력', cost:450000, desc:'조리 판정 쉬워짐' },
+  { id:'table2', name:'야외 좌석', cost:700000, desc:'대기석 +2' },
+];
+const DREAMS = [
+  { id:'repay',   name:'🏦 대출 상환 (100만원)', cost:1000000, desc:'원금을 갚으면 매주 이자가 줄어든다 — 빚 없는 가게가 진짜 내 가게' },
+  { id:'hire',    name:'🧑 알바 고용', cost:30000, desc:'기본 일당 41,000원 — 역할과 일당은 사장이 정한다 (최저 미달 시 신고 위험) · 최대 3명' },
+  { id:'recipe',  name:'📖 레시피 연구 시작', cost:100000, desc:'조건: 숙련 15+ · 3일 소요 → 판매가 +20% (동시 1건)' },
+  { id:'remodel', name:'🏠 리모델링 계약', cost:1500000, desc:'공사 2일 — 그동안 영업 불가! → 대기석 +2, 평판 +10' },
+  { id:'branch',  name:'🏪 2호점 개업', cost:10000000, desc:'매일 정산에 2호점 순익 합산 — 사장님의 꿈!' },
+];
+const STAFF_ROLES = { kitchen:'🍳 주방(새벽 손질)', hall:'🤝 홀(★1 조리+서빙)', clean:'🧹 청소', flyer:'📣 전단지' };
+const ROLE_ORDER = ['hall','kitchen','clean','flyer'];
+const STAFF_NAMES = ['영수 형','미나 누나','철진 삼촌','보라 이모','대학생 준영','대학생 하은'];
+const MIN_WAGE = 41000;   // 2026 최저임금 ×4시간 (전국 동일 — 지방의 무게)
+const WAGE_STEPS = [30000, 36000, 41000, 48000];
+// 사기 = 일하는 속도. 최저 미달 = 저하(즉시). 인상 = 반짝 상승 후 '적응'으로 원점 복귀.
+// 지속일 = 인상액 1,000원당 1일 (48,000원 = 7일). 삭감하면 감동 즉사.
+function effOf(st) {
+  if (st.wage < MIN_WAGE) return Math.max(.7, st.wage / MIN_WAGE);
+  if (st.wage === MIN_WAGE || st.glowStart == null) return 1;
+  const total = Math.max(1, Math.round((st.wage - MIN_WAGE) / 1000));
+  const elapsed = S.day - st.glowStart;
+  if (elapsed >= total) return 1;   // 익숙해졌다
+  const maxBonus = Math.min(.15, (st.wage - MIN_WAGE) / MIN_WAGE);
+  return 1 + maxBonus * (1 - elapsed / total);
+}
+const SEASON_DAYS = 180;   // 시즌 = 게임 내 6개월. 순위는 순자산 기준.
+function assetValue() {
+  let v = S.money;
+  UPGRADES.forEach(u => { if (S.ups[u.id]) v += u.cost; });
+  MENUS.forEach(m => { if (S.unlocked[m.id] && m.unlock) v += m.unlock; });
+  MENUS.forEach(m => { if (S.recipe[m.id]) v += 100000; });
+  if (S.remodel) v += 1500000;
+  if (S.branch) v += 10000000;
+  if (S.banner) v += 60000;
+  Object.keys(S.stock).forEach(id => { v += (S.stock[id]||0) * ING[id].cost; });
+  v -= S.debt;
+  v -= S.loan;   // 대출 잔액은 순자산에서 뺀다
+  return v;
+}
+const RENT = 150000;      // 주간 임대료 (월 60만 — 지방 소도시 상가)
+const VAT = 0.1;          // 부가세 (주간 매출의 10%)
+const UTIL = 120000;      // 주간 공과금 (전기·가스·수도 — 어묵솥은 가스 하마)
+const LIVING = 250000;    // 주간 사장 생활비 (사장도 먹고살아야 한다)
+const LOAN_START = 20000000;   // 창업 대출 (보증금+설비+권리금이 이 돈이었다)
+const LOAN_RATE = 0.0012;      // 주간 이자율 (연 ~6.2%)
+const CARD_FEE = 0.012;        // 카드 수수료 (매출의 1.2%)
+const INSURANCE = 0.1;         // 4대보험 사업주 부담 (임금의 10%)
+const FRESH_CAP = 12;     // 이 개수 초과 재고는 매일 밤 30% 폐기 (신선도)
+const EVENTS = [
+  { id:'franchise', icon:'🏢', name:'대형 프랜차이즈 오픈', days:3, w:3, desc:"옆 골목에 '왕분식' 오픈! 손님 발길이 뜸해져요", end:'🏢 왕분식 철수! 동네 단골의 승리 🎉', on:s=>s.evtGap=1.4, off:s=>s.evtGap=1 },
+  { id:'supply', icon:'📦', name:'재료 수급 대란', days:2, w:3, ing:true, end:'📦 도매가 정상화!', on:(s,i)=>s.evtCost[i]=2, off:(s,i)=>delete s.evtCost[i] },
+  { id:'rain', icon:'🌧', name:'비 오는 날', days:1, w:3, desc:'비가 옵니다. 다들 따뜻한 어묵을 찾네요', end:'🌤 비가 갰습니다!', on:s=>{s.evtGap=1.25;s.bias='eomuk';}, off:s=>{s.evtGap=1;s.bias=null;} },
+  { id:'viral', icon:'📱', name:'SNS 바이럴', days:1, w:2, desc:'가게 영상이 떡상! 손님이 몰려와요 — 재료는 충분한가요?', end:'📱 열기가 식었습니다', on:s=>s.evtGap=.55, off:s=>s.evtGap=1 },
+  { id:'undokai', icon:'🏃', name:'운동회 날', days:1, w:1, desc:'오늘은 K-운동회 날! 배고픈 학생들이 쏟아집니다!', end:'🏃 운동회 끝 — 최고의 하루!', on:s=>s.evtGap=.5, off:s=>s.evtGap=1 },
+];
+
+// ═══════════════ 상태 ═══════════════
+const S = {
+  day:1, phase:'dawn', phaseLeft:T.dawn, money:50000, cond:100, rep:30, dirt:0,
+  stock:{tteok:8,eomuk:5,gimbap:5}, prepped:{}, skill:{}, unlocked:{tteok:true},
+  policy:'normal', style:'neat', flyers:0, banner:false, tasting:0, upIdx:0, ups:{},
+  hand:null, queue:[], passerby:null, resting:false, sick:false,
+  evtGap:1, evtCost:{}, bias:null, activeEvt:null, evtCd:0,
+  led:{rev:0,spend:0,served:0,missed:0,fTry:0,fHit:0,bHit:0,tHit:0},
+  combo:0, comboAt:0, servesSinceStain:0,
+  staffList:[], recipe:{}, remodel:false, branch:false,
+  research:null, construction:null,
+  weekRev:0, debt:0, regulars:{}, reports:0, suspension:0,
+  loan:LOAN_START,
+};
+try { const sv = JSON.parse(localStorage.getItem('bunsik_v3')||'null'); if (sv && sv.day) Object.assign(S, sv); } catch(e) {}
+S.queue = []; S.passerby = null; S.hand = null;   // 휘발 상태는 리셋
+S.staffList = (S.staffList || []).map(st => Object.assign({ wage: 41000, owed: 0, glowStart: null, hiredDay: 1 }, st));   // 구버전 저장 마이그레이션
+
+// ═══════════════ 📜 의사결정 기록계 — 언제, 어떤 상황에서, 무엇을 선택했나 ═══════════════
+if (!S.decisions) S.decisions = [];
+function D(action, detail) {
+  S.decisions.push({
+    day: S.day, phase: S.phase,
+    money: S.money, rep: Math.round(S.rep), cond: Math.round(S.cond),
+    queue: S.queue.length, stock: Object.keys(S.stock).reduce((a,k)=>a+(S.stock[k]||0),0),
+    action, detail: detail || null,
+  });
+  if (S.decisions.length > 8000) S.decisions.splice(0, 2000);
+}
+
+// ═══════════════ 유틸/로그 ═══════════════
+const $ = id => document.getElementById(id);
+const logEl = $('log');
+function log(msg, cls) {
+  const d = document.createElement('div');
+  if (cls) d.className = cls;
+  d.textContent = msg;
+  logEl.appendChild(d);
+  while (logEl.children.length > 250) logEl.removeChild(logEl.firstChild);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function news(msg) { const n = $('news'); n.textContent = msg; n.style.display = 'block';
+  clearTimeout(news._t); news._t = setTimeout(() => n.style.display = 'none', 5000); log('📰 ' + msg, 'y'); }
+function save() { localStorage.setItem('bunsik_v3', JSON.stringify(S)); }
+const rnd = a => a[Math.floor(Math.random()*a.length)];
+const menuById = id => MENUS.find(m => m.id === id);
+function slots() { return 3 + (S.ups.awning?1:0) + (S.ups.table2?2:0) + (S.remodel?2:0) + (S.phase==='rush'?2:0); }
+function menuPrice(m) { return Math.ceil(m.price * (S.recipe[m.id]?1.2:1)); }
+function patience() { return 35 + (S.ups.table1?10:0) + POLICY[S.policy].pat; }
+function ingCost(id) { return ING[id].cost * (S.evtCost[id]||1); }
+
+// ═══════════════ 손님 ═══════════════
+function spawnGap() {
+  let g = 4.5 * (S.ups.sign?.8:1) * POLICY[S.policy].gap * (1.15 - S.rep*.003) * S.evtGap;
+  if (S.phase==='rush') g *= .4;
+  if (S.phase==='evening') g *= 1.8;
+  return g;
+}
+let custTimer = 3;
+function pickOrder() {
+  if (S.bias && S.unlocked[S.bias] && Math.random()<.6) return menuById(S.bias);
+  return rnd(MENUS.filter(m => S.unlocked[m.id]));
+}
+function addCustomer(fromFlyer, g, nm) {
+  if (S.queue.length >= slots()) return false;
+  const gender = g || (Math.random()<.5?'M':'F');
+  let name = nm || (gender==='M'?rnd(NAMES_M):rnd(NAMES_F));
+  // 💜 단골 재방문: 평판이 좋을수록 단골이 자주 온다
+  let isReg = false;
+  const regNames = Object.keys(S.regulars);
+  if (!nm && regNames.length && Math.random() < .25 + S.rep*.002) {
+    name = rnd(regNames); isReg = true;
+  } else isReg = !!S.regulars[name];
+  const order = pickOrder();
+  const pat = patience() + (isReg ? 10 : 0);
+  S.queue.push({ name, gender, order, pat, max: pat, reg: isReg });
+  log(`${isReg?'💜 단골 ':''}${gender==='M'?'👦':'👧'} ${name} 학생 도착 — "${order.emoji} ${order.name}${isReg?' 늘 먹던 걸로':''} 주세요!"${fromFlyer?' (전단지 보고 옴!)':''}`, (fromFlyer||isReg)?'g':'d');
+  return true;
+}
+
+// ═══════════════ 조리 미니게임 (정지 바 — 로그게임 v1은 1종 통일) ═══════════════
+let mini = null;
+function startCook(id) {
+  if (!isOpen()) return log('아직 개점 전! 🔔 종을 치세요', 'b');
+  if (S.sick) return log('🤒 몸살! 쉬어야 해요 (컨디션 25까지 회복 필요)', 'b');
+  if (S.hand) return log('이미 접시를 들고 있어요 — 먼저 서빙!', 'b');
+  if ((S.stock[id]||0) <= 0) return log('재료 소진! 📦 발주하세요', 'b');
+  const m = menuById(id);
+  mini = { id, round:0, total:m.rounds, scores:[], t:0, dir:1 };
+  $('miniTitle').textContent = `${m.emoji} ${m.name} 조리 (${m.rounds}탭)`;
+  $('miniFb').textContent = '';
+  // 판정존: 숙련 넓히고, 화력 업글 넓히고, 과로 좁힘
+  const skill = Math.min(.3, (S.skill[id]||0)*.006);
+  let zone = .18 * (1+skill) * (S.ups.stove2?1.25:1) * (S.cond<30?.8:1);
+  mini.zone = Math.max(.08, zone);
+  const zEl = $('zone');
+  zEl.style.width = (mini.zone*100)+'%'; zEl.style.left = ((.5-mini.zone/2)*100)+'%';
+  $('mini').style.display = 'flex';
+}
+function miniTap() {
+  if (!mini) return;
+  const pos = mini.t;   // 0..1 왕복 위치
+  const err = Math.abs(pos-.5);
+  let sc, txt;
+  if (err <= mini.zone/2) { sc=1; txt='완벽! ⭐'; } else if (err <= mini.zone*1.2) { sc=.6; txt='좋아!'; } else { sc=.2; txt='이런…'; }
+  mini.scores.push(sc); mini.round++;
+  $('miniFb').textContent = txt;
+  if (mini.round >= mini.total) {
+    const avg = mini.scores.reduce((a,b)=>a+b,0)/mini.scores.length;
+    let q = avg>=.8?3:avg>=.5?2:1;
+    const id = mini.id;
+    S.stock[id]--; S.cond = Math.max(0, S.cond-3); checkCond();
+    S.skill[id] = (S.skill[id]||0)+1;
+    if ((S.prepped[id]||0) > 0) { S.prepped[id]--; q = Math.min(3, q+1); log('🔪 손질해둔 재료라 더 잘 나왔다! +⭐', 'y'); }
+    S.hand = { id, q };
+    log(`${menuById(id).emoji} ${menuById(id).name} 완성 ${'⭐'.repeat(q)} (숙련 ${S.skill[id]})`);
+    $('mini').style.display = 'none'; mini = null; render();
+  }
+}
+$('tapBtn').addEventListener('pointerdown', e => { e.preventDefault(); miniTap(); });
+
+// ═══════════════ 서빙 ═══════════════
+function serve(i) {
+  const c = S.queue[i];
+  if (!c || !S.hand || S.hand.id !== c.order.id) return;
+  const q = S.hand.q;
+  let price = Math.ceil(menuPrice(c.order) * QUAL.mul[q-1] * POLICY[S.policy].mul);
+  const tipC = (S.ups.deco?.3:.1) + QUAL.tip[q-1] + POLICY[S.policy].tip + (c.reg?.2:0);
+  const tip = Math.random()<tipC ? 500 : 0;   // "잔돈은 됐어요!"
+  const now = Date.now()/1000;
+  S.combo = (now - S.comboAt < 20) ? S.combo+1 : 1; S.comboAt = now;
+  const cb = Math.min(2500, (S.combo-1)*500);
+  const gross = price+tip+cb;
+  const fee = Math.ceil(gross * CARD_FEE);
+  S.money += gross - fee; S.led.rev += gross; S.led.spend += fee; S.led.cardFee = (S.led.cardFee||0) + fee;
+  S.led.served++;
+  if (q===3) S.rep = Math.min(100, S.rep+2); else if (q===2) S.rep = Math.min(100, S.rep+1);
+  // 💜 단골 등록: 좋은 경험(★2+)을 한 학생은 단골이 될 수 있다
+  if (q >= 2 && !S.regulars[c.name] && Math.random() < .35) {
+    S.regulars[c.name] = { visits: 1 };
+    log(`💜 ${c.name} 학생이 단골이 됐다! (다음부터 참을성 있게 기다리고 잔돈도 잘 준다)`, 'y');
+  } else if (S.regulars[c.name]) { S.regulars[c.name].visits++; }
+  let react = QUAL.react[q-1]; if (q===3) react = react.replace('%s', c.order.name);
+  log(`💰 ${c.name}: "${react}" +${fmt(price)}${tip?` 잔돈+${tip}`:''}${cb?` 콤보+${cb}`:''}${S.combo>=2?` 🔥x${S.combo}`:''}`, 'g');
+  S.queue.splice(i,1); S.hand = null;
+  if (++S.servesSinceStain >= 3 && S.dirt < 6) { S.servesSinceStain = 0; S.dirt++; log('🧹 바닥에 얼룩이 생겼다… (' + S.dirt + '개)', 'd'); }
+  render();
+}
+
+// ═══════════════ 컨디션/청소/휴식 ═══════════════
+function checkCond() {
+  if (S.cond <= 0 && !S.sick) { S.sick = true; S.rep = Math.max(0, S.rep-5); log('🤒 몸살이 났다! 조리 불가 — 쉬어야 한다 (평판 -5)', 'b'); }
+  if (S.sick && S.cond >= 25) { S.sick = false; log('💪 몸이 좀 나아졌다!', 'g'); }
+}
+
+// ═══════════════ 행인/마케팅 ═══════════════
+let pbTimer = 10;
+function flyerRate(g) {
+  let r = .4 + S.rep*.002;
+  const st = STYLES[S.style];
+  if (st.g==='all' || st.g===g) r += st.b;
+  return Math.min(.9, r);
+}
+function passerbyTick(dt) {
+  if (S.passerby) {
+    S.passerby.left -= dt;
+    if (S.passerby.left <= 0) { S.passerby = null; render(); }
+    return;
+  }
+  if (!isOpen()) return;
+  pbTimer -= dt;
+  if (pbTimer <= 0) {
+    pbTimer = 12 + Math.random()*6;
+    const gender = Math.random()<.5?'M':'F';
+    S.passerby = { gender, name: gender==='M'?rnd(NAMES_M):rnd(NAMES_F), left:6 };
+    // 현수막/시식 자발 판정
+    if (S.banner && Math.random()<.1) { log(`🪧 현수막을 본 ${S.passerby.name} 학생이 들어온다!`, 'g'); S.led.bHit++; addCustomer(false, S.passerby.gender, S.passerby.name); S.passerby=null; }
+    else if (S.tasting>0) { S.tasting--; if (Math.random()<.65) { log(`🍡 시식하던 ${S.passerby.name} 학생이 자리에 앉는다!`, 'g'); S.led.tHit++; addCustomer(false,S.passerby.gender,S.passerby.name); S.passerby=null; } else log(`🍡 ${S.passerby.name} 학생, 시식만 하고 간다… (재료만 소모 ㅋㅋ)`, 'd'); }
+    render();
+  }
+}
+function giveFlyer() {
+  const p = S.passerby;
+  if (!p || S.flyers<=0 || S.hand) return;
+  S.flyers--; S.cond = Math.max(0,S.cond-2); checkCond(); S.led.fTry++;
+  if (Math.random() < flyerRate(p.gender)) {
+    if (addCustomer(true, p.gender, p.name)) S.led.fHit++;
+    else log(`${p.name} 학생: 관심은 있는데… 자리가 없네요`, 'd');
+  } else log(`${p.gender==='M'?'👦':'👧'} ${p.name}: "괜찮아요~" 하며 지나간다 😅`, 'd');
+  S.passerby = null; render();
+}
+
+// ═══════════════ 알바 (사람을 고용해 역할을 맡긴다) ═══════════════
+function staffOf(role) { return S.staffList.filter(st => st.role === role); }
+function staffStar(st) { return Math.min(2, 1 + Math.floor((S.day - (st.hiredDay||S.day)) / 5)); }   // 근속 5일 = ★2
+let hallTimer = 0, cleanTimer = 0, flyTimer = 0;
+function staffTick(dt) {
+  if (staffOf('clean').length && S.dirt > 0) {
+    cleanTimer -= dt;
+    if (cleanTimer <= 0) { cleanTimer = 12 / effOf(staffOf('clean')[0]); S.dirt--; log(`🧹 ${staffOf('clean')[0].name}이(가) 얼룩을 치웠다 (${S.dirt}개 남음)`, 'd'); }
+  }
+  const halls = staffOf('hall');
+  if (halls.length && isOpen()) {
+    hallTimer -= dt;
+    if (hallTimer <= 0) {
+      hallTimer = 9 / halls.reduce((a, st) => a + effOf(st), 0);   // 임금 = 사기 = 속도
+      const i = S.queue.findIndex(c => (S.stock[c.order.id]||0) > 0);
+      if (i >= 0) {
+        const c = S.queue[i];
+        S.stock[c.order.id]--;
+        const star = staffStar(halls[0]);   // 근속이 실력이 된다
+        const price = Math.ceil(menuPrice(c.order) * QUAL.mul[star-1] * POLICY[S.policy].mul);
+        const fee = Math.ceil(price * CARD_FEE);
+        S.money += price - fee; S.led.rev += price; S.led.spend += fee; S.led.cardFee = (S.led.cardFee||0) + fee;
+        S.led.served++;
+        log(`🤝 ${halls[0].name}이(가) ${c.name} 학생에게 ${c.order.emoji} 서빙 (+${fmt(price)}, ${'⭐'.repeat(star)})`, 'd');
+        S.queue.splice(i, 1);
+        if (++S.servesSinceStain >= 3 && S.dirt < 6) { S.servesSinceStain = 0; S.dirt++; }
+      }
+    }
+  }
+  const flyers = staffOf('flyer');
+  if (flyers.length && isOpen() && S.passerby && S.flyers > 0) {
+    flyTimer -= dt;
+    if (flyTimer <= 0) {
+      flyTimer = 3;
+      const pb = S.passerby;
+      S.flyers--; S.led.fTry++;
+      const r = .4 + S.rep * .002;   // 알바는 스타일 보정 없음
+      if (Math.random() < r && addCustomer(true, pb.gender, pb.name)) { S.led.fHit++; log(`📣 ${flyers[0].name}의 전단지가 통했다!`, 'g'); }
+      else log(`📣 ${flyers[0].name}이(가) 전단지를 돌렸지만 그냥 가네요`, 'd');
+      S.passerby = null; render();
+    }
+  }
+}
+
+// ═══════════════ 돌발 이벤트 ═══════════════
+let evtTimer = 50;
+function eventTick(dt) {
+  evtTimer -= dt;
+  if (evtTimer > 0) return;
+  evtTimer = 45 + Math.random()*35;
+  if (S.day < 2 || S.phase === 'night') return;
+  const biz = isOpen();
+  if (biz && Math.random() < .04) {   // 위생 단속
+    if (S.dirt >= 3) { S.rep=Math.max(0,S.rep-10); S.money=Math.max(0,S.money-150000); S.led.spend+=150000; news('🧑‍⚖️ 위생 단속! 얼룩 적발 — 과태료 150,000원 + 평판 -10 😱'); }
+    else { S.rep=Math.min(100,S.rep+5); news('🧑‍⚖️ 위생 단속! 깨끗한 가게 인증 — 평판 +5 ✨'); }
+    render(); return;
+  }
+  if (!S.activeEvt && S.evtCd<=0 && Math.random() < (biz?.09:.05)) {
+    const pool = []; EVENTS.forEach(e => { for(let i=0;i<e.w;i++) pool.push(e); });
+    const def = rnd(pool);
+    const ing = def.ing ? rnd(Object.keys(S.unlocked)) : null;
+    S.activeEvt = { def, left:def.days, ing };
+    def.on(S, ing);
+    news(`${def.icon} ${def.name}! ${def.desc || (ing?`${ING[ing].name} 도매가 2배! — 쟁여둔 재고가 효자`:'')}`);
+    render();
+  }
+}
+function endEvent() {
+  if (!S.activeEvt) return;
+  S.activeEvt.def.off(S, S.activeEvt.ing);
+  news(S.activeEvt.def.end); S.activeEvt = null; S.evtCd = 100; render();
+}
+
+// ═══════════════ 하루 사이클 ═══════════════
+function isOpen() { return ['open','rush','evening'].includes(S.phase); }
+function setPhase(p) {
+  S.phase = p; S.phaseLeft = T[p];
+  const names = { dawn:'🌅 새벽 — 준비 시간', open:'☀️ 영업 중', rush:'🔔 하교 러시!', evening:'🌆 저녁 — 언제 닫을까', night:'🌙 마감' };
+  log(`━━ ${names[p]} ━━`, 'y');
+  if (p==='rush') news('🔔 하교 시간! 손님 러시!');
+  if (p==='dawn') {
+    if (S.construction) {
+      log(`🏗 공사 중 (${S.construction.daysLeft}일 남음) — 오늘은 영업할 수 없다. 알바 일당은 나간다…`, 'b');
+    } else {
+      log(`${S.day}일차 아침. 장보기·손질·청소하고 종을 치세요 (${T.dawn}초 후 자동 개점)`, 'd');
+    }
+    staffOf('kitchen').forEach(st => {
+      let done = 0;
+      const cap = st.wage < MIN_WAGE ? 2 : 3;   // 사기 저하 = 손이 느리다
+      MENUS.filter(m=>S.unlocked[m.id]).forEach(m => {
+        for (let k=0; k<2; k++) if ((S.stock[m.id]||0)>0 && (S.prepped[m.id]||0)<5 && done<cap) { S.stock[m.id]--; S.prepped[m.id]=(S.prepped[m.id]||0)+1; done++; }
+      });
+      if (done) log(`🍳 ${st.name}이(가) 새벽 손질 ${done}개를 해뒀다`, 'd');
+    });
+    if (S.activeEvt) { S.activeEvt.left--; if (S.activeEvt.left<=0) endEvent(); else news(`${S.activeEvt.def.icon} ${S.activeEvt.def.name} — 남은 기간 ${S.activeEvt.left}일`); }
+  }
+  render();
+}
+function ringBell() {
+  if (S.phase==='dawn') {
+    if (S.construction) { log('🗏 공사 중이라 문을 열 수 없다 — [공사 감독하며 하루 보내기]', 'b'); doNight(); return; }
+    if (S.suspension > 0) { log('⛔ 영업정지 처분 중… 문을 열 수 없다. 반성의 하루', 'b'); doNight(); return; }
+    log('🔔 개점! 오늘도 장사 시작!', 'y'); setPhase('open');
+  }
+  else if (isOpen()) { log('🔔 오늘 영업 끝! 마감합니다', 'y'); doNight(); }
+}
+function doNight() {
+  setPhase('night');
+  S.queue.forEach(c => log(`${c.name} 학생을 돌려보냈다…`, 'd'));
+  S.queue = [];
+  const L = S.led;
+  // 인건비 (고정비 — 공사 중이든 매출이 없든 나간다)
+  const wagesBase = S.staffList.reduce((a, st) => a + st.wage, 0);
+  const wages = Math.ceil(wagesBase * (1 + INSURANCE));
+  if (wages) { S.money = Math.max(0, S.money - wages); L.spend += wages;
+    log(`💸 알바 일당 -${fmt(wagesBase)} + 4대보험 -${fmt(wages-wagesBase)} (${S.staffList.length}명)`, 'd'); }
+  // 🥬 신선도: 너무 쟁인 재료는 상한다 (창고 대량발주의 그림자)
+  Object.keys(S.stock).forEach(id => {
+    if (S.stock[id] > FRESH_CAP) {
+      const waste = Math.ceil((S.stock[id]-FRESH_CAP) * .3);
+      S.stock[id] -= waste;
+      log(`🥬 ${ING[id].name} ${waste}개가 신선도가 떨어져 폐기했다… (원가 ${fmt(waste*ING[id].cost)} 손실)`, 'b');
+    }
+  });
+  // 🏠 주간 고지서: 7일마다 월세 + 부가세 (번 돈이 다 내 돈이 아니다)
+  S.weekRev += L.rev;
+  if (S.day % 7 === 0) {
+    const vat = Math.ceil(S.weekRev * VAT);
+    const interest = Math.ceil(S.loan * LOAN_RATE);
+    const bill = RENT + vat + UTIL + interest + LIVING;
+    log(`🧾📮 주간 고지서! 임대료 ${fmt(RENT)} + 공과금 ${fmt(UTIL)} + 부가세 ${fmt(vat)} + 대출이자 ${fmt(interest)} + 생활비 ${fmt(LIVING)} = ${fmt(bill)}`, 'y');
+    if (S.money >= bill) { S.money -= bill; L.spend += bill; }
+    else {
+      const short = bill - S.money;
+      L.spend += S.money; S.money = 0; S.debt += short;
+      log(`💸 잔고 부족! ${fmt(short)}이 빚으로 남았다… (빚이 있으면 매일 평판이 깎인다)`, 'b');
+    }
+    S.weekRev = 0;
+  }
+  // 빚 상환/압박
+  if (S.debt > 0) {
+    if (S.money > 0) {
+      const pay = Math.min(S.money, S.debt);
+      S.money -= pay; S.debt -= pay;
+      log(`💳 빚 ${fmt(pay)} 상환${S.debt>0?` (남은 빚 ${fmt(S.debt)})`:' — 다 갚았다!'}`, S.debt>0?'d':'g');
+    }
+    if (S.debt > 0) { S.rep = Math.max(0, S.rep-1); log(`😰 빚 ${fmt(S.debt)}의 무게… (평판 -1)`, 'b'); }
+  }
+  // ⭐ 평판은 관리하지 않으면 잦아든다 (자연 감소)
+  S.rep = Math.max(0, S.rep - 2);
+  // 🎓 알바 성장 통보
+  S.staffList.forEach(st => {
+    if (S.day - (st.hiredDay||S.day) === 4) log(`🎓 ${st.name}이(가) 일이 손에 익은 것 같다 (내일부터 ⭐⭐ 조리!)`, 'g');
+  });
+  if (S.suspension > 0) S.suspension--;
+  // 😌 적응: 인상의 감동이 오늘로 끝난 알바
+  S.staffList.forEach(st => {
+    if (st.glowStart != null && st.wage > MIN_WAGE) {
+      const total = Math.max(1, Math.round((st.wage - MIN_WAGE) / 1000));
+      if (S.day - st.glowStart === total - 1) {
+        log(`😌 ${st.name}이(가) 인상된 일당에 익숙해진 것 같다… (내일부터 효율 원점)`, 'd');
+      }
+    }
+  });
+  // ⚖️ 최저임금 미달의 대가: 미지급 차액 누적 → 신고/퇴사 리스크
+  for (let i = S.staffList.length - 1; i >= 0; i--) {
+    const st = S.staffList[i];
+    if (st.wage >= MIN_WAGE) continue;
+    const gap = MIN_WAGE - st.wage;
+    st.owed += gap;
+    const shortRatio = gap / MIN_WAGE;
+    if (Math.random() < shortRatio * .25) {
+      // 🚨 노동청 신고! (상습이면 가중처벌 + 영업정지)
+      const back = st.owed * 2, fine = 500000 * Math.pow(2, S.reports);
+      S.reports++;
+      S.money = Math.max(0, S.money - back - fine); L.spend += back + fine;
+      S.rep = Math.max(0, S.rep - 15);
+      log(`🚨 노동청 신고!! ${st.name} 임금체불 적발 — 밀린 차액 2배 배상 ${fmt(back)} + 과태료 ${fmt(fine)}${S.reports>1?` (${S.reports}회 상습 가중!)`:''} + 평판 -15`, 'b');
+      if (S.reports >= 2) { S.suspension = 1; log('⛔ 상습 위반으로 영업정지 1일 처분!!', 'b'); }
+      log(`${st.name}은(는) 가게를 떠났다…`, 'b');
+      S.staffList.splice(i, 1);
+    } else if (Math.random() < shortRatio * .15) {
+      log(`😞 ${st.name}: "저 그만둘게요…" (일당 ${fmt(st.wage)}에 지쳤다 — 밀린 차액 ${fmt(st.owed)}은 못 받고 떠남)`, 'b');
+      S.rep = Math.max(0, S.rep - 3);
+      S.staffList.splice(i, 1);
+    } else if (Math.random() < .4) {
+      log(`😟 ${st.name}이(가) 요즘 힘이 없다… (최저임금 미달 ${st.owed > gap ? '누적 ' + fmt(st.owed) : fmt(gap)})`, 'd');
+    }
+  }
+  // 📖 레시피 연구 진행 (밤마다)
+  if (S.research) {
+    S.research.daysLeft--;
+    if (S.research.daysLeft <= 0) {
+      S.recipe[S.research.menu] = true;
+      const m = menuById(S.research.menu);
+      log(`📖 ${m.name} 레시피 연구 완성!! 판매가 ${fmt(m.price)}→${fmt(menuPrice(m))} (영구)`, 'y');
+      S.research = null;
+    } else log(`📖 밤 늦게까지 연구 노트를 쓴다… (${S.research.daysLeft}일 남음)`, 'd');
+  }
+  // 🏗 공사 진행
+  if (S.construction) {
+    S.construction.daysLeft--;
+    if (S.construction.daysLeft <= 0) {
+      S.construction = null; S.remodel = true; S.rep = Math.min(100, S.rep+10);
+      log('🏠 리모델링 완공!! 대기석 +2, 평판 +10 — 가게가 몰라보게 좋아졌다 🎉', 'y');
+    } else log(`🏗 공사가 진행 중이다 (${S.construction.daysLeft}일 남음)`, 'd');
+  }
+  // 🏪 2호점: 오늘 순익의 30% 만큼 벌어다 줌 (최소 20원)
+  let branchGain = 0;
+  if (S.branch) { branchGain = Math.max(0, Math.ceil((L.rev - L.spend) * .15)); S.money += branchGain; L.rev += branchGain; }
+  const profit = L.rev - L.spend;
+  const rate = L.fTry ? Math.round(L.fHit/L.fTry*100) : 0;
+  const stockLeft = Object.keys(S.stock).reduce((a,k)=>a+(S.stock[k]||0),0);
+  const tips = [];
+  if (L.missed) tips.push('💡 놓친 손님은 벌 수 있었던 돈!');
+  if (S.cond < 30) tips.push('💡 몸도 자원 — 내일은 무리하지 말기');
+  if (S.dirt >= 3) tips.push('💡 얼룩을 치우세요 — 단속 뜨면 벌금');
+  if (!L.fTry) tips.push('💡 한가할 땐 전단지를 돌려보세요');
+  $('ledgerBody').innerHTML = `<h2>🧾 영업 ${S.day}일차 정산</h2>
+매출 <b>${fmt(L.rev)}</b> · 지출 <b>-${fmt(L.spend)}</b><br>─────────────<br>순이익 <b style="color:${profit>=0?'#3a7a3a':'#b04040'}">${profit>=0?'+':''}${fmt(profit)}</b><br><br>
+서빙 ${L.served}명 · 놓침 ${L.missed}명<br>📣 전단지 ${L.fHit}/${L.fTry} (${rate}%) · 🪧 ${L.bHit} · 🍡 ${L.tHit}<br>
+정책 ${POLICY[S.policy].name} · ⭐평판 ${Math.floor(S.rep)} · 재료 ${stockLeft}개 · ♥${Math.floor(S.cond)}<br>
+${wages?`💸 인건비 ${fmt(wages)} `:''}${branchGain?`🏪 2호점 +${fmt(branchGain)}`:''}<br><br>
+${tips[0]||'💡 내일도 화이팅!'}<br><button onclick="nextDay()">💤 자고 일어나기</button>`;
+  D('closing', `순익 ${profit} 서빙 ${L.served} 놓침 ${L.missed} 전단지 ${L.fHit}/${L.fTry}`);
+  $('ledger').style.display = 'flex';
+  save();
+}
+function nextDay() {
+  $('ledger').style.display = 'none';
+  if (S.day >= SEASON_DAYS) {
+    // 🏁 시즌 종료!
+    const asset = assetValue();
+    $('ledgerBody').innerHTML = `<h2>🏁 시즌 종료 — ${SEASON_DAYS}일 완주!</h2>
+<b style="font-size:22px">최종 순자산 ${fmt(asset)}</b><br>
+(현금 ${fmt(S.money)} + 설비·투자 + 재고 − 빚)<br><br>
+⭐평판 ${Math.floor(S.rep)} · 💜단골 ${Object.keys(S.regulars).length}명 · 🧑알바 ${S.staffList.length}명<br>
+🚨 노동청 신고 ${S.reports}회 · 🏪 2호점 ${S.branch?'달성!':'미달성'} · 🏦 대출 ${S.loan>0?fmt(S.loan)+' 남음':'완제!'}<br><br>
+<input id="nickInput" placeholder="닉네임 (2~12자)" maxlength="12" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #ccc;margin:6px 0"><br>
+<button onclick="submitScore()">🏆 순위표에 제출!</button>
+<button onclick="exportLedger()">📜 시즌 일지 내보내기</button>
+<button onclick="localStorage.removeItem('bunsik_v3');location.reload()">🌱 새 시즌 시작</button>`;
+    $('ledger').style.display = 'flex';
+    D('seasonEnd', `순자산 ${asset}`);
+    save();
+    return;
+  }
+  S.day++; S.cond = Math.min(100, S.cond+45); checkCond();
+  S.led = {rev:0,spend:0,served:0,missed:0,fTry:0,fHit:0,bHit:0,tHit:0};
+  S.combo = 0; setPhase('dawn'); save();
+}
+
+// ═══════════════ 액션 ═══════════════
+const A = {
+  bell: ringBell,
+  dayoff() {
+    if (S.phase !== 'dawn') return log('휴업 결정은 새벽에만!','b');
+    log('😴 오늘 휴업을 결정했다. 몸을 쉬게 한다… (하지만 월세와 일당은 나간다)', 'y');
+    S.cond = Math.min(100, S.cond + 40);
+    doNight();
+  },
+  order(id) { const c = ingCost(id)*5; if (S.money<c) return log('잔액 부족!','b');
+    S.money-=c; S.led.spend+=c; S.stock[id]=(S.stock[id]||0)+5; log(`📦 ${ING[id].name} +5개 (-${fmt(c)})${S.evtCost[id]?' ⚠️2배 가격!':''}`); render(); },
+  bulk() { const ids = Object.keys(S.unlocked); const c = Math.ceil(ids.reduce((a,id)=>a+ingCost(id)*10,0)*.85);
+    if (S.money<c) return log(`창고 대량발주는 ${fmt(c)} — 잔액 부족!`,'b');
+    S.money-=c; S.led.spend+=c; ids.forEach(id=>S.stock[id]+=10); log(`🏪 창고 대량발주! 전 재료 +10개 (-${fmt(c)}, 15% 할인)`); render(); },
+  prep(id) { if (S.phase!=='dawn') return log('손질은 새벽에만!','b');
+    if ((S.stock[id]||0)<=0) return log('재료가 없어요!','b');
+    if ((S.prepped[id]||0)>=5) return log('손질은 메뉴당 5개까지','b');
+    S.stock[id]--; S.prepped[id]=(S.prepped[id]||0)+1; S.cond=Math.max(0,S.cond-1); checkCond();
+    log(`🔪 ${ING[id].name} 손질 (${S.prepped[id]}개 준비 — 조리 시 품질 +1)`); render(); },
+  clean() { if (S.dirt<=0) return; S.dirt--; S.cond=Math.max(0,S.cond-1); checkCond(); log(`🧹 얼룩 하나 청소! (남은 ${S.dirt}개)`); render(); },
+  flyerBuy() { if (S.money<5000) return log('잔액 부족!','b'); S.money-=5000; S.led.spend+=5000; S.flyers+=10; log('📣 전단지 10장 인쇄 (-5,000원)'); render(); },
+  bannerBuy() { if (S.banner) return; if (S.money<60000) return log('잔액 부족!','b'); S.money-=60000; S.led.spend+=60000; S.banner=true; log('🪧 현수막 제작·설치! (-60,000원) 이제 행인 10%가 자발 방문 (영구)','g'); render(); },
+  taste() { if ((S.stock.tteok||0)<=0) return log('떡볶이 재료가 없어요!','b'); if (S.tasting>=3) return;
+    S.stock.tteok--; S.tasting++; log(`🍡 시식 접시 진열 (${S.tasting}/3) — 행인 65% 전환`); render(); },
+  policy() { const i = POLICY_ORDER.indexOf(S.policy); S.policy = POLICY_ORDER[(i+1)%3]; log(`💲 가격 정책: ${POLICY[S.policy].name}`); render(); },
+  style() { const i = STYLE_ORDER.indexOf(S.style); S.style = STYLE_ORDER[(i+1)%3]; log(`오늘의 스타일: ${STYLES[S.style].name}`); render(); },
+  rest() { S.resting = !S.resting; log(S.resting?'🪑 의자에 앉아 쉰다… (회복 3배)':'다시 일어났다!'); render(); },
+  unlock(id) { const m = menuById(id); if (S.money<m.unlock) return log(`${m.name} 설비는 ${fmt(m.unlock)}!`,'b');
+    S.money-=m.unlock; S.led.spend+=m.unlock; S.unlocked[id]=true; log(`${m.emoji} ${m.name} 설비 설치 완료!! 새 메뉴 개시`,'g'); render(); },
+  upgrade() { const up = UPGRADES[S.upIdx]; if (!up) return; if (S.money<up.cost) return log(`${up.name}은 ${fmt(up.cost)}!`,'b');
+    S.money-=up.cost; S.led.spend+=up.cost; S.ups[up.id]=true; S.upIdx++; log(`⬆ ${up.name} 구입! (${up.desc})`,'g'); render(); },
+  dream(id) {
+    const d = DREAMS.find(x=>x.id===id); if (!d) return;
+    if (S.money < d.cost) return log(`${d.name}은 ${fmt(d.cost)} — 아직 ${fmt(d.cost-S.money)} 부족!`,'b');
+    if (id==='repay') {
+      if (S.loan <= 0) return;
+      const pay = Math.min(1000000, S.loan);
+      S.money -= pay; S.loan -= pay;
+      log(`🏦 대출 원금 ${fmt(pay)} 상환! 남은 대출 ${fmt(S.loan)}${S.loan<=0?' — 🎉 드디어 빚 없는 내 가게다!!':''}`, S.loan<=0?'y':'g');
+    } else if (id==='hire') {
+      if (S.staffList.length >= 3) return log('알바는 3명까지! (가게가 좁아요)','b');
+      S.money-=d.cost; S.led.spend+=d.cost;
+      const name = STAFF_NAMES.filter(n=>!S.staffList.some(st=>st.name===n))[0] || '알바생';
+      S.staffList.push({ name, role:'hall', wage:MIN_WAGE, owed:0, hiredDay:S.day });
+      log(`🧑 ${name} 고용! (기본 배치: 홀, 일당 ${fmt(MIN_WAGE)}) — 알바 카드를 탭해 역할·일당을 정하세요`,'g');
+    } else if (id==='recipe') {
+      if (S.research) return log(`이미 ${menuById(S.research.menu).name} 연구 중! (동시 1건)`,'b');
+      const target = MENUS.find(m => S.unlocked[m.id] && !S.recipe[m.id] && (S.skill[m.id]||0) >= 15);
+      if (!target) return log('연구 조건: 숙련 15 이상 + 미연구 메뉴 — 아직 몸이 덜 익었어요 (많이 만들어보세요)','b');
+      S.money-=d.cost; S.led.spend+=d.cost; S.research = { menu:target.id, daysLeft:3 };
+      log(`📖 ${target.name} 레시피 연구 시작! 3일간 밤마다 연구합니다 (숙련 ${S.skill[target.id]})`,'g');
+    } else if (id==='remodel') {
+      if (S.remodel || S.construction) return;
+      S.money-=d.cost; S.led.spend+=d.cost; S.construction = { daysLeft:2 };
+      log('🏠 리모델링 계약! 내일부터 공사 2일 — 그동안 영업 불가입니다. 각오되셨죠, 사장님?','y');
+    } else if (id==='branch') {
+      if (S.branch) return; S.money-=d.cost; S.led.spend+=d.cost; S.branch=true;
+      log('🏪🎉 2호점 개업!!! 이제 매일 2호점 순익이 들어옵니다 — 사장님, 꿈을 이루셨네요','y');
+    }
+    render();
+  },
+  role(i) {
+    const st = S.staffList[i]; if (!st) return;
+    st.role = ROLE_ORDER[(ROLE_ORDER.indexOf(st.role)+1) % ROLE_ORDER.length];
+    log(`🧑 ${st.name} 역할 변경 → ${STAFF_ROLES[st.role]}`); render();
+  },
+  wage(i) {
+    const st = S.staffList[i]; if (!st) return;
+    const prev = st.wage;
+    st.wage = WAGE_STEPS[(WAGE_STEPS.indexOf(st.wage)+1) % WAGE_STEPS.length];
+    if (st.wage > prev && st.wage > MIN_WAGE) {
+      st.glowStart = S.day;   // 인상의 감동 점화
+      const days = Math.round((st.wage - MIN_WAGE) / 1000);
+      log(`💸 ${st.name} 일당 인상 ${fmt(prev)}→${fmt(st.wage)}! "사장님 최고!!" (효율 ↑ — 하지만 약 ${days}일이면 익숙해질 것이다…)`, 'g');
+    } else if (st.wage < prev) {
+      st.glowStart = null;   // 삭감 = 감동 즉사
+      if (st.wage < MIN_WAGE) log(`💸 ${st.name} 일당 삭감 ${fmt(prev)}→${fmt(st.wage)}… 최저임금 미달! 언제 노동청에 신고될지 몰라요`, 'b');
+      else log(`💸 ${st.name} 일당 삭감 ${fmt(prev)}→${fmt(st.wage)}. ${st.name}의 표정이 굳었다 (감동은 끝났다)`, 'b');
+    } else {
+      log(`💸 ${st.name} 일당 ${fmt(st.wage)} (최저임금 준수)`);
+    }
+    render();
+  },
+};
+
+// ═══════════════ 렌더 ═══════════════
+function render() {
+  const pn = { dawn:'🌅 새벽', open:'☀️ 영업', rush:'🔔 러시!', evening:'🌆 저녁', night:'🌙 마감' };
+  $('topbar').innerHTML = `<b>${S.day}/${SEASON_DAYS}일</b> ${pn[S.phase]} <span class="tag">(${Math.ceil(S.phaseLeft)}초)</span>
+    ${S.activeEvt?`<span style="color:var(--gold)">${S.activeEvt.def.icon}${S.activeEvt.def.name}</span>`:''}
+    <span style="margin-left:auto"><b>💰 ${fmt(S.money)}</b></span>`;
+  $('statbar').innerHTML = `♥<span class="meter"><i style="width:${S.cond}%;background:${S.cond<30?'#e88a7a':'#7fd18a'}"></i></span>
+    ${S.loan>0?`<span style="color:#e8a15a">🏦${Math.round(S.loan/10000)}만</span>`:'🎉완제'} ⭐${Math.floor(S.rep)} 💜${Object.keys(S.regulars).length} 🧹${S.dirt>0?`얼룩${S.dirt}`:'깨끗'} 📣${S.flyers}장 ${S.debt>0?`<span style="color:var(--bad)">💳빚 ${fmt(S.debt)}</span>`:''} ${S.sick?'🤒몸살!':''} ${S.resting?'🪑쉬는 중':''}
+    <span style="margin-left:auto" class="tag">${POLICY[S.policy].name}·${STYLES[S.style].name}</span>`;
+  $('queue').innerHTML = S.queue.map((c,i) => {
+    const match = S.hand && S.hand.id===c.order.id;
+    return `<div class="cust ${match?'match':''}" onclick="serve(${i})">${c.reg?'💜':''}${c.gender==='M'?'👦':'👧'} ${c.name}<br>${c.order.emoji} ${c.order.name}${match?'<br><b>👉 서빙!</b>':''}
+      <div class="pat"><i style="width:${c.pat/c.max*100}%;background:${c.pat<10?'#e88a7a':'#7fd18a'}"></i></div></div>`;
+  }).join('') || '<span class="tag" style="padding:20px">손님 없음' + (isOpen()?' — 곧 옵니다':'') + '</span>';
+  $('passerbyBox').innerHTML = S.passerby ? `<button class="hot" onclick="A_giveFlyer()">🚶 ${S.passerby.gender==='M'?'👦':'👧'} ${S.passerby.name} 학생이 지나간다! ${S.flyers>0&&!S.hand?'📣 전단지 주기':'(전단지 없음/손 참)'}</button>` : '';
+  $('hand').textContent = S.hand ? `🤲 들고 있음: ${menuById(S.hand.id).emoji} ${'⭐'.repeat(S.hand.q)} — 주문 맞는 손님을 탭!` : '';
+  $('stations').innerHTML = MENUS.map(m => S.unlocked[m.id]
+    ? `<button class="hot" onclick="startCook('${m.id}')">${m.emoji} 조리<br><span class="tag">재고${S.stock[m.id]||0}${(S.prepped[m.id]||0)?` 🔪${S.prepped[m.id]}`:''} 숙련${S.skill[m.id]||0}</span></button>
+       <button onclick="A.order('${m.id}')">📦 +5<br><span class="tag">${ingCost(m.id)*5}원${S.evtCost[m.id]?'⚠️':''}</span></button>`
+    : `<button onclick="A.unlock('${m.id}')">🔒 ${m.name} 설비<br><span class="tag">${fmt(m.unlock)}</span></button>`).join('');
+  // 🎯 다음 꿈: 아직 안 이룬 가장 싼 꿈
+  const dreamAvail = d =>
+    (d.id==='repay') ? S.loan > 0
+    : (d.id==='hire') ? S.staffList.length < 3
+    : (d.id==='recipe') ? (!S.research && MENUS.some(m=>S.unlocked[m.id]&&!S.recipe[m.id]))
+    : (d.id==='remodel') ? (!S.remodel && !S.construction) : !S.branch;
+  const nextDream = DREAMS.find(dreamAvail);
+  const up = UPGRADES[S.upIdx];
+  $('actions').innerHTML = `
+    <button class="hot" onclick="A.bell()">🔔 ${S.phase==='dawn'?'개점':'마감'} 종</button>
+    ${S.phase==='dawn' ? MENUS.filter(m=>S.unlocked[m.id]).map(m=>`<button onclick="A.prep('${m.id}')">🔪 ${m.name} 손질</button>`).join('') + '<button onclick="A.dayoff()">😴 오늘 휴업</button>' : ''}
+    <button onclick="A.bulk()">🏪 창고 대량</button>
+    <button onclick="A.flyerBuy()">📣 전단지 5천원</button>
+    ${!S.banner?'<button onclick="A.bannerBuy()">🪧 현수막 6만원</button>':''}
+    <button onclick="A.taste()">🍡 시식 ${S.tasting}/3</button>
+    <button ${S.dirt<=0?'disabled':''} onclick="A.clean()">🧹 청소 (${S.dirt})</button>
+    <button onclick="A.policy()">💲 가격</button>
+    <button onclick="A.style()">🧢 스타일</button>
+    <button class="${S.resting?'on':''}" onclick="A.rest()">🪑 ${S.resting?'일어나기':'쉬기'}</button>
+    <button onclick="showBoard()">🏆 순위표</button>
+    <button onclick="exportLedger()">📜 경영일지<br><span class="tag">${(S.decisions||[]).length}건 기록됨</span></button>
+    <button class="${window.SPEED>1?'on':''}" onclick="window.SPEED=window.SPEED>=3?1:window.SPEED+1;render()">⏩ 배속 ×${window.SPEED||1}</button>
+    ${up?`<button onclick="A.upgrade()">⬆ ${up.name} ${fmt(up.cost)}<br><span class="tag">${up.desc}</span></button>`:''}
+    ${DREAMS.filter(dreamAvail)
+      .map(d => `<button ${S.money<d.cost?'disabled':''} onclick="A.dream('${d.id}')">${d.name} ${fmt(d.cost)}<br><span class="tag">${d.desc}</span></button>`).join('')}
+    ${S.staffList.map((st,i) => `<button onclick="A.role(${i})">🧑 ${st.name} ${st.wage<MIN_WAGE?'😟':effOf(st)>1.02?'😄':'🙂'}<br><span class="tag">${STAFF_ROLES[st.role]} (탭=역할)</span></button>
+      <button onclick="A.wage(${i})" ${st.wage<MIN_WAGE?'style="border-color:var(--bad)"':''}>💸 ${fmt(st.wage)}<br><span class="tag">효율 ${Math.round(effOf(st)*100)}%${st.wage<MIN_WAGE?' ⚠️미달':''} (탭=조정)</span></button>`).join('')}`;
+  if (nextDream) {
+    $('topbar').innerHTML += `<span class="tag" style="width:100%">🎯 다음 꿈: ${nextDream.name} — ${Math.min(100,Math.floor(S.money/nextDream.cost*100))}% (${fmt(S.money)} / ${fmt(nextDream.cost)})</span>`;
+  }
+  if (S.research) $('topbar').innerHTML += `<span class="tag">📖 ${menuById(S.research.menu).name} 연구 ${S.research.daysLeft}일 남음</span>`;
+  if (S.construction) $('topbar').innerHTML += `<span class="tag" style="color:var(--bad)">🏗 공사 ${S.construction.daysLeft}일 남음 — 영업 불가</span>`;
+}
+// 모든 의사결정 액션 자동 계측 (원본 동작 불변)
+Object.keys(A).forEach(k => {
+  const fn = A[k];
+  A[k] = (...args) => { D(k, args.length ? args.join(',') : null); return fn(...args); };
+});
+const _serve = serve;
+serve = (i) => { const c = S.queue[i]; const had = S.hand; const r = _serve(i);
+  if (c && had) D('serve', `${c.name}/${had.id}★${had.q}${c.reg?'/단골':''}`); return r; };
+const _giveFlyer = giveFlyer;
+giveFlyer = () => { D('flyer', S.passerby && S.passerby.name); return _giveFlyer(); };
+
+window.A_giveFlyer = giveFlyer;
+window.serve = serve; window.startCook = startCook; window.nextDay = nextDay; window.A = A;
+// ═══════════════ 🏆 순위표 (Supabase — blogctl/bunsik 스키마) ═══════════════
+const SB_URL = 'https://iwslrkoonyxyausvclxv.supabase.co';
+const SB_KEY = 'sb_publishable__BEJsC-KMEmdtyr7E_uzvg_-1Rl1KHq';
+const SB_HDR = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY };
+
+window.submitScore = async () => {
+  const nick = (document.getElementById('nickInput')?.value || '').trim();
+  if (nick.length < 2 || nick.length > 12) { alert('닉네임은 2~12자!'); return; }
+  const body = {
+    season: 1, nickname: nick, day: S.day, asset: assetValue(),
+    money: S.money, loan: S.loan, branch: S.branch,
+    reports: S.reports, regulars: Object.keys(S.regulars).length,
+    ledger: { decisions: (S.decisions || []).slice(-6000) },
+    client: 'web-v1',
+  };
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/scores', {
+      method: 'POST',
+      headers: { ...SB_HDR, 'Content-Type': 'application/json', 'Content-Profile': 'bunsik', Prefer: 'return=minimal' },
+      body: JSON.stringify(body),
+    });
+    if (r.ok) { log('🏆 순위표 제출 완료! (' + nick + ' — 순자산 ' + fmt(assetValue()) + ')', 'y'); showBoard(); }
+    else { const t = await r.text(); log('순위표 제출 실패 (' + r.status + ') — 서버 준비 중이거나 오류: ' + t.slice(0, 80), 'b'); }
+  } catch (e) { log('순위표 서버에 연결 못 함 — 오프라인?', 'b'); }
+};
+
+window.showBoard = async () => {
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/scores?select=nickname,asset,day,branch,created_at&season=eq.1&order=asset.desc.nullslast&limit=10', {
+      headers: { ...SB_HDR, 'Accept-Profile': 'bunsik' },
+    });
+    if (!r.ok) { log('🏆 순위표를 불러올 수 없어요 (서버 준비 중 — ' + r.status + ')', 'b'); return; }
+    const rows = await r.json();
+    const aiLine = { nickname: '🤖 AI 사장', asset: 12500000, day: 180, branch: false };
+    const all = [...rows, aiLine].sort((a, b) => b.asset - a.asset);
+    document.getElementById('ledgerBody').innerHTML = '<h2>🏆 시즌 1 순위표</h2>' +
+      (all.map((r2, i) => `${i+1}위 <b>${r2.nickname}</b> — ${fmt(r2.asset)} <span class="tag">(${r2.day}일${r2.branch?' · 🏪2호점':''})</span>`).join('<br>') || '아직 기록 없음') +
+      '<br><br><span class="tag">🤖 = AI 벤치마크 (파산율 33%)</span><br><button onclick="document.getElementById(\'ledger\').style.display=\'none\'">닫기</button>';
+    document.getElementById('ledger').style.display = 'flex';
+  } catch (e) { log('순위표 서버에 연결 못 함', 'b'); }
+};
+
+window.exportLedger = () => {
+  const data = { game: 'K-분식집', exported: new Date().toISOString(), day: S.day,
+    summary: { money: S.money, rep: Math.round(S.rep), regulars: Object.keys(S.regulars).length,
+      staff: S.staffList.map(st => ({ name: st.name, role: st.role, wage: st.wage })),
+      reports: S.reports, dreams: { recipe: S.recipe, remodel: S.remodel, branch: S.branch } },
+    decisions: S.decisions };
+  const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `분식집_경영일지_${S.day}일차.json`;
+  a.click();
+  log(`📜 경영일지 ${S.decisions.length}건 내보내기 완료 — 이 기록이 바이블의 재료가 됩니다`, 'y');
+};
+window.G = S;   // 디버그/테스트 훅
+
+// ═══════════════ 메인 루프 ═══════════════
+let last = Date.now();
+function gameTick(dt) {
+  if ($('ledger').style.display === 'flex') return;   // 정산 중 일시정지
+  // 페이즈 진행
+  S.phaseLeft -= dt;
+  if (S.phaseLeft <= 0) {
+    if (S.phase==='dawn') {
+      if (S.construction || S.suspension > 0) { doNight(); }
+      else { log('🔔 개점 시간! (자동)', 'y'); setPhase('open'); }
+    }
+    else if (S.phase==='open') setPhase('rush');
+    else if (S.phase==='rush') setPhase('evening');
+    else if (S.phase==='evening') doNight();
+  }
+  // 미니게임 커서
+  if (mini) { mini.t += dt/0.95*mini.dir; if (mini.t>=1){mini.t=1;mini.dir=-1;} if (mini.t<=0){mini.t=0;mini.dir=1;}
+    $('cur').style.left = `calc(${mini.t*100}% - 4px)`; }
+  // 컨디션 회복
+  if (!mini && S.phase !== 'rush') { S.cond = Math.min(100, S.cond + 0.6*dt*(S.resting?3:1)); checkCond(); }   // 러시 중엔 숨 돌릴 틈이 없다
+  // 손님 스폰/인내심
+  if (isOpen()) {
+    custTimer -= dt;
+    if (custTimer <= 0) { custTimer = spawnGap(); addCustomer(); render(); }
+    let changed = false;
+    for (let i=S.queue.length-1; i>=0; i--) {
+      const c = S.queue[i]; c.pat -= dt;
+      if (c.pat <= 0) {
+        if (c.reg) { log(`💔 단골 ${c.name}을(를) 놓쳤다!! "여기 변했네…" (단골 이탈, 평판 -5)`, 'b');
+          delete S.regulars[c.name]; S.rep=Math.max(0,S.rep-5); }
+        else { log(`💢 ${c.name} 학생이 화나서 가버렸다! (콤보 끊김, 평판 -3)`, 'b'); S.rep=Math.max(0,S.rep-3); }
+        S.queue.splice(i,1); S.led.missed++; S.combo=0; changed=true; }
+    }
+    if (changed) render();
+  }
+  passerbyTick(dt); eventTick(dt); staffTick(dt);
+  if (S.evtCd>0) S.evtCd -= dt;
+  // 가벼운 UI 갱신 (1초마다)
+  const now = Date.now();
+  if (!render._t || now-render._t > 1000) { render._t = now; render(); }
+}
+window.gameTick = gameTick;   // 시뮬/배속 훅
+window.SPEED = 1;
+setInterval(() => {
+  if (window.PAUSE) return;
+  const now = Date.now(), dt = Math.min(1, (now-last)/1000); last = now;
+  gameTick(dt * window.SPEED);
+}, 250);
+
+log('🍢 K-분식집에 오신 것을 환영합니다! (방과후 스튜디오 — 웹 로그 프로토타입)', 'y');
+log(`🏦 창업 대출 ${fmt(LOAN_START)}과 함께 시작합니다 — 보증금·설비·권리금이 이 돈이었죠. 매주 이자가 나갑니다`, 'b');
+log('새벽입니다. 재료를 준비하고 🔔 종을 쳐서 문을 여세요.', 'd');
+setPhase(S.phase === 'dawn' ? 'dawn' : 'dawn');
+render();
+</script>
+</body>
+</html>
