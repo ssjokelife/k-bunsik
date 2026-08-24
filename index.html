@@ -40,12 +40,21 @@ button.on { border-color:var(--gold); color:var(--gold); }
 #ledger button { width:100%; margin-top:10px; background:var(--accent); color:#fff; border:0; }
 .news { position:fixed; top:12px; left:50%; transform:translateX(-50%); background:#2c2418; border:2px solid var(--gold); color:var(--gold); border-radius:12px; padding:10px 18px; z-index:30; font-size:15px; max-width:90%; text-align:center; display:none; }
 .tag { font-size:12px; color:var(--dim); }
+.grp { width:100%; font-size:12px; color:var(--dim); margin:8px 2px 0; border-bottom:1px solid #33333d; padding-bottom:3px; }
+#hint { background:#2c2418; border-left:4px solid var(--gold); border-radius:0 10px 10px 0; padding:8px 12px; margin:6px 0; font-size:13.5px; color:var(--gold); }
+#pauseOv { position:fixed; inset:0; background:rgba(0,0,0,.82); display:none; align-items:center; justify-content:center; flex-direction:column; z-index:40; }
+#pauseOv h2 { color:#fff; } #pauseOv button { background:var(--accent); color:#fff; border:0; font-size:18px; padding:14px 40px; }
+#guide { position:fixed; inset:0; background:rgba(0,0,0,.82); display:none; align-items:center; justify-content:center; z-index:35; overflow-y:auto; }
+#guide .paper { background:#f7f1e3; color:#333; border-radius:14px; padding:20px 24px; width:88%; max-width:420px; font-size:14px; line-height:1.8; margin:20px 0; }
+#guide h2 { color:#c05a46; margin:4px 0 10px; } #guide h3 { color:#6b5b3e; margin:14px 0 4px; font-size:15px; }
+#guide button { width:100%; background:var(--accent); color:#fff; border:0; margin-top:12px; font-size:16px; padding:12px; }
 </style>
 </head>
 <body>
 <h1>🍢 K-분식집 <span class="tag">영업일지 — 방과후 스튜디오</span></h1>
 <div class="bar" id="topbar"></div>
 <div class="bar" id="statbar"></div>
+<div id="hint" style="display:none"></div>
 <div class="queue" id="queue"></div>
 <div id="passerbyBox" class="grid"></div>
 <div id="hand"></div>
@@ -55,6 +64,26 @@ button.on { border-color:var(--gold); color:var(--gold); }
 <div id="mini"><h2 id="miniTitle"></h2><div class="track"><div class="zone" id="zone"></div><div class="cur" id="cur"></div></div><div class="fb" id="miniFb"></div><button class="tap" id="tapBtn">탭!</button></div>
 <div id="ledger"><div class="paper" id="ledgerBody"></div></div>
 <div class="news" id="news"></div>
+<div id="pauseOv"><h2>⏸ 일시정지</h2><button onclick="togglePause()">▶ 계속하기</button></div>
+<div id="guide"><div class="paper">
+<h2>🍢 K-분식집 가이드</h2>
+<b>당신은 학교 앞 분식집 사장님.</b> 창업 대출 <b>2,000만원</b>을 안고 시작합니다.
+시즌(180일) 뒤 <b>순자산</b>으로 순위를 겨뤄요 — 🤖 AI 사장은 1,250만원 벌었고, 3판 중 1판은 파산했습니다.
+<h3>📅 하루의 흐름</h3>
+🌅 <b>새벽</b>: 재료 📦 사고 · 🔪 손질하고 · 🧹 청소 → <b>🔔 종을 치면 개점!</b><br>
+☀️ <b>영업</b>: 조리하고 서빙 → 🔔 <b>하교 러시</b>(대목!) → 🌆 저녁 → 🔔 종으로 마감 → 🧾 정산
+<h3>🍳 조리와 서빙 (핵심!)</h3>
+① 손님 카드에 주문이 떠요 (🍲 떡볶이!)<br>
+② <b>[🍲 조리]</b> 버튼 → 움직이는 커서를 <b>초록 구간에서 탭</b> — 잘 맞추면 ⭐⭐⭐ (비싸게 팔림!)<br>
+③ 완성되면 <b>초록 테두리 손님 카드를 탭</b> = 서빙 완료 💰
+<h3>💸 돈 조심</h3>
+매주 <b>고지서</b>가 옵니다: 임대료+공과금+부가세+대출이자+생활비. <b>번 돈이 다 내 돈이 아니에요.</b>
+<h3>💡 생존 팁 3</h3>
+· 러시 <b>전에</b> 재고를 쟁여두세요 (단, 너무 많으면 상해요)<br>
+· 얼룩 방치 = 위생단속 과태료 15만원<br>
+· 몸도 자원 — 컨디션 바닥나면 몸살로 조리 불가
+<button onclick="document.getElementById('guide').style.display='none'">🔔 개업하러 가기!</button>
+</div></div>
 
 <script>
 // ═══════════════ 규칙 (design.json 이식 — 로블록스판과 동일 수치) ═══════════════
@@ -696,24 +725,45 @@ function render() {
   const nextDream = DREAMS.find(dreamAvail);
   const up = UPGRADES[S.upIdx];
   $('actions').innerHTML = `
+    <div class="grp">⏰ 하루</div>
     <button class="hot" onclick="A.bell()">🔔 ${S.phase==='dawn'?'개점':'마감'} 종</button>
-    ${S.phase==='dawn' ? MENUS.filter(m=>S.unlocked[m.id]).map(m=>`<button onclick="A.prep('${m.id}')">🔪 ${m.name} 손질</button>`).join('') + '<button onclick="A.dayoff()">😴 오늘 휴업</button>' : ''}
+    <button onclick="togglePause()">⏸ 일시정지</button>
+    <button class="${window.SPEED>1?'on':''}" onclick="window.SPEED=window.SPEED>=3?1:window.SPEED+1;render()">⏩ 배속 ×${window.SPEED||1}</button>
+    ${S.phase==='dawn' ? '<button onclick="A.dayoff()">😴 오늘 휴업</button>' : ''}
+    ${S.phase==='dawn' ? '<div class="grp">🌅 새벽 준비 (지금만!)</div>' + MENUS.filter(m=>S.unlocked[m.id]).map(m=>`<button onclick="A.prep('${m.id}')">🔪 ${m.name} 손질</button>`).join('') : ''}
+    <div class="grp">🛒 장사 준비</div>
     <button onclick="A.bulk()">🏪 창고 대량</button>
     <button onclick="A.flyerBuy()">📣 전단지 5천원</button>
     ${!S.banner?'<button onclick="A.bannerBuy()">🪧 현수막 6만원</button>':''}
     <button onclick="A.taste()">🍡 시식 ${S.tasting}/3</button>
+    <div class="grp">🏪 운영</div>
     <button ${S.dirt<=0?'disabled':''} onclick="A.clean()">🧹 청소 (${S.dirt})</button>
-    <button onclick="A.policy()">💲 가격</button>
-    <button onclick="A.style()">🧢 스타일</button>
+    <button onclick="A.policy()">💲 가격: ${POLICY[S.policy].name}</button>
+    <button onclick="A.style()">🧢 ${STYLES[S.style].name}</button>
     <button class="${S.resting?'on':''}" onclick="A.rest()">🪑 ${S.resting?'일어나기':'쉬기'}</button>
-    <button onclick="showBoard()">🏆 순위표</button>
-    <button onclick="exportLedger()">📜 경영일지<br><span class="tag">${(S.decisions||[]).length}건 기록됨</span></button>
-    <button class="${window.SPEED>1?'on':''}" onclick="window.SPEED=window.SPEED>=3?1:window.SPEED+1;render()">⏩ 배속 ×${window.SPEED||1}</button>
+    <div class="grp">🎯 투자와 꿈</div>
     ${up?`<button onclick="A.upgrade()">⬆ ${up.name} ${fmt(up.cost)}<br><span class="tag">${up.desc}</span></button>`:''}
     ${DREAMS.filter(dreamAvail)
       .map(d => `<button ${S.money<d.cost?'disabled':''} onclick="A.dream('${d.id}')">${d.name} ${fmt(d.cost)}<br><span class="tag">${d.desc}</span></button>`).join('')}
     ${S.staffList.map((st,i) => `<button onclick="A.role(${i})">🧑 ${st.name} ${st.wage<MIN_WAGE?'😟':effOf(st)>1.02?'😄':'🙂'}<br><span class="tag">${STAFF_ROLES[st.role]} (탭=역할)</span></button>
-      <button onclick="A.wage(${i})" ${st.wage<MIN_WAGE?'style="border-color:var(--bad)"':''}>💸 ${fmt(st.wage)}<br><span class="tag">효율 ${Math.round(effOf(st)*100)}%${st.wage<MIN_WAGE?' ⚠️미달':''} (탭=조정)</span></button>`).join('')}`;
+      <button onclick="A.wage(${i})" ${st.wage<MIN_WAGE?'style="border-color:var(--bad)"':''}>💸 ${fmt(st.wage)}<br><span class="tag">효율 ${Math.round(effOf(st)*100)}%${st.wage<MIN_WAGE?' ⚠️미달':''} (탭=조정)</span></button>`).join('')}
+    <div class="grp">📜 기록</div>
+    <button onclick="showBoard()">🏆 순위표</button>
+    <button onclick="exportLedger()">📜 경영일지</button>
+    <button onclick="showGuide()">❓ 가이드</button>`;
+  // 👉 신규 사장 힌트 (첫 3일)
+  const hintEl = $('hint');
+  if (S.day <= 3) {
+    const HINTS = {
+      dawn: '👉 지금 할 일: 📦 재료 사기 → 🔪 손질 → 준비되면 🔔 종!',
+      open: '👉 손님 주문 확인 → [🍳 조리] 탭 타이밍 게임 → 완성되면 초록 테두리 손님 탭!',
+      rush: '👉 하교 러시! 최대한 많이 서빙하세요 — 준비한 만큼 법니다',
+      evening: '👉 손님이 뜸해져요. 🔔 종으로 마감하면 정산 — 늦을수록 몸이 축나요',
+      night: '🧾 정산 중…',
+    };
+    hintEl.textContent = HINTS[S.phase] || '';
+    hintEl.style.display = 'block';
+  } else hintEl.style.display = 'none';
   if (nextDream) {
     $('topbar').innerHTML += `<span class="tag" style="width:100%">🎯 다음 꿈: ${nextDream.name} — ${Math.min(100,Math.floor(S.money/nextDream.cost*100))}% (${fmt(S.money)} / ${fmt(nextDream.cost)})</span>`;
   }
@@ -833,6 +883,15 @@ function gameTick(dt) {
 }
 window.gameTick = gameTick;   // 시뮬/배속 훅
 window.SPEED = 1;
+window.togglePause = () => {
+  window.PAUSE = !window.PAUSE;
+  document.getElementById('pauseOv').style.display = window.PAUSE ? 'flex' : 'none';
+};
+window.showGuide = () => { document.getElementById('guide').style.display = 'flex'; };
+document.addEventListener('visibilitychange', () => {
+  // 앱/탭 전환 시 자동 일시정지 (모바일에서 손님 증발 방지)
+  if (document.hidden && !window.PAUSE) togglePause();
+});
 setInterval(() => {
   if (window.PAUSE) return;
   const now = Date.now(), dt = Math.min(1, (now-last)/1000); last = now;
@@ -844,6 +903,10 @@ log(`🏦 창업 대출 ${fmt(LOAN_START)}과 함께 시작합니다 — 보증�
 log('새벽입니다. 재료를 준비하고 🔔 종을 쳐서 문을 여세요.', 'd');
 setPhase(S.phase === 'dawn' ? 'dawn' : 'dawn');
 render();
+if (!localStorage.getItem('bunsik_guide_v1')) {
+  localStorage.setItem('bunsik_guide_v1', '1');
+  showGuide();
+}
 </script>
 </body>
 </html>
