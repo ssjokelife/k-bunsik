@@ -114,11 +114,13 @@ button.on { border-color:var(--gold); color:var(--gold); }
 ② <b>[🍲 조리]</b> 버튼 → 움직이는 커서를 <b>초록 구간에서 탭</b> — 잘 맞추면 ⭐⭐⭐ (비싸게 팔림!)<br>
 ③ 완성되면 <b>초록 테두리 손님 카드를 탭</b> = 서빙 완료 💰
 <h3>💸 돈 조심</h3>
-매주 <b>고지서</b>가 옵니다: 임대료+공과금+부가세+대출이자+생활비. <b>번 돈이 다 내 돈이 아니에요.</b>
+매주 <b>고지서</b>(임대료+공과금+이자+생활비)가 오고, 부가세는 <b>간이과세</b>로 쌓였다가 <b>7월 25일에 한 방</b>에 옵니다. <b>번 돈이 다 내 돈이 아니에요.</b>
+<h3>📅 학교 앞 장사는 달력이 반</h3>
+3월 2일 개학날 개업. 주말·시험기간엔 학생이 줄고, <b>여름방학(7/20~8/18)은 최대 보스</b> — 방학을 버틸 현금을 준비하세요. 비 오는 날은 어묵, 폭염엔 손님이 뜸해요.
 <h3>💡 생존 팁 3</h3>
 · 러시 <b>전에</b> 재고를 쟁여두세요 (단, 너무 많으면 상해요)<br>
-· 얼룩 방치 = 위생단속 과태료 15만원<br>
-· 몸도 자원 — 컨디션 바닥나면 몸살로 조리 불가
+· 얼룩 방치 = 위생단속 과태료 15만원 · 몸도 자원<br>
+· 어르신 외상은 관계 자산 — 대부분 갚지만, 가끔 못 받아요
 <button onclick="document.getElementById('guide').style.display='none'">🔔 개업하러 가기!</button>
 </div></div>
 
@@ -174,6 +176,61 @@ function effOf(st) {
   return 1 + maxBonus * (1 - elapsed / total);
 }
 const SEASON_DAYS = 180;   // 시즌 = 게임 내 6개월. 순위는 순자산 기준.
+
+// ═══════ 📅 달력·학사일정 — 학교 앞 장사는 학사일정이 반 (1일차 = 3월 2일 월요일 개학) ═══════
+const MONTH_DAYS = { 3:31, 4:30, 5:31, 6:30, 7:31, 8:31 };
+const WD_NAMES = ['월','화','수','목','금','토','일'];
+const SCHOOL = {   // mul = 손님 간격 배수(클수록 한산), rush = 러시 강도(작을수록 대목)
+  semester:{ mul:1,    rush:.4,  badge:'' },
+  sat:     { mul:1.4,  rush:.7,  badge:'🛍토요일' },
+  sun:     { mul:1.9,  rush:.85, badge:'⛪일요일' },
+  exam:    { mul:1.35, rush:.55, badge:'✏️시험기간' },
+  examEnd: { mul:.6,   rush:.35, badge:'🎉시험 끝!' },
+  vacation:{ mul:1.75, rush:.85, badge:'🏖여름방학' },
+  back:    { mul:.7,   rush:.4,  badge:'🏫개학 특수' },
+};
+function calInfo(day) {
+  let m = 3, d = 2 + (day - 1);
+  while (d > MONTH_DAYS[m]) { d -= MONTH_DAYS[m]; m++; }
+  const wd = (day - 1) % 7;
+  let school = 'semester';
+  if (day >= 141 && day <= 170) school = 'vacation';                          // 7/20 ~ 8/18
+  else if (day === 60 || day === 121) school = 'examEnd';                      // 시험 마지막 날 = 해방 특수
+  else if ((day >= 57 && day <= 60) || (day >= 117 && day <= 121)) school = 'exam';   // 중간·기말
+  else if (day >= 171 && day <= 173) school = 'back';                          // 개학 특수 3일
+  else if (wd === 5) school = 'sat';
+  else if (wd === 6) school = 'sun';
+  return { m, d, wd, wdName: WD_NAMES[wd], school, ...SCHOOL[school] };
+}
+
+// ═══════ 🌦 날씨 — 분식은 날씨 장사 (비=어묵, 폭염=한산, 황사=행인 실종) ═══════
+const WX = {
+  sunny:{ icon:'☀️', name:'맑음',     gap:1,    pb:1 },
+  cloud:{ icon:'☁️', name:'흐림',     gap:1.05, pb:1.1 },
+  rain: { icon:'🌧', name:'비',       gap:1.35, pb:1.6, flyer:.6, eomuk:1.9 },
+  heat: { icon:'🥵', name:'폭염',     gap:1.25, pb:1.4, eomuk:.5, cook:1 },
+  cold: { icon:'🌬', name:'꽃샘추위', gap:1.1,  pb:1.2, eomuk:1.6 },
+  dust: { icon:'😷', name:'황사',     gap:1.2,  pb:1.8 },
+};
+function rollWx(day) {
+  const { m, d } = calInfo(day);
+  const r = Math.random();
+  const pick = pairs => { let acc = 0; for (const [k, p] of pairs) { acc += p; if (r < acc) return k; } return 'sunny'; };
+  let id = 'sunny';
+  if (m === 3) id = pick([['rain',.15],['cloud',.2],['cold',.12]]);
+  else if (m === 4) id = pick([['rain',.15],['cloud',.15],['dust',.12]]);
+  else if (m === 5) id = pick([['rain',.18],['cloud',.15]]);
+  else if (m === 6) id = pick([['rain', d >= 20 ? .5 : .3],['cloud',.2]]);          // 6월 말 = 장마 초입
+  else if (m === 7) id = d <= 25 ? pick([['rain',.55],['cloud',.2],['heat',.1]])    // 장마
+                                  : pick([['heat',.45],['rain',.15]]);
+  else id = pick([['heat',.5],['rain',.18]]);                                       // 8월 = 폭염
+  return { day, id };
+}
+const wxNow = () => WX[(S.wx && S.wx.id)] || WX.sunny;
+
+// 👵 어르신 손님 — 지방 소도시의 진짜 단골. 현금을 쓰고, 가끔 외상을 부탁한다
+const NAMES_E = ['순자 할머니','병철 할아버지','말순 할머니','기수 할아버지','정심 이모','판술 아저씨'];
+const ELDER_F = ['순자 할머니','말순 할머니','정심 이모'];
 function assetValue() {
   let v = S.money;
   UPGRADES.forEach(u => { if (S.ups[u.id]) v += u.cost; });
@@ -183,12 +240,15 @@ function assetValue() {
   if (S.branch) v += 10000000;
   if (S.banner) v += 60000;
   Object.keys(S.stock).forEach(id => { v += (S.stock[id]||0) * ING[id].cost; });
+  v += Math.floor(((S.credit && S.credit.out) || 0) * .8);   // 외상 채권 (회수율 80% 가정)
   v -= S.debt;
   v -= S.loan;   // 대출 잔액은 순자산에서 뺀다
+  v -= (S.vatDue || 0);   // 쌓인 부가세는 언젠가 낼 돈 — 이미 부채다
   return v;
 }
 const RENT = 150000;      // 주간 임대료 (월 60만 — 지방 소도시 상가)
-const VAT = 0.1;          // 부가세 (주간 매출의 10%)
+const VAT_SIMPLE = 0.015; // 간이과세 실효 부가세율 (음식점 부가율 15% × 10% — 연매출 1억 미만 분식집의 현실)
+const VAT_BILL_DAY = 146; // 7월 25일 = 부가세 예정고지의 날 (쌓인 세금이 한 방에 온다)
 const UTIL = 120000;      // 주간 공과금 (전기·가스·수도 — 어묵솥은 가스 하마)
 const LIVING = 250000;    // 주간 사장 생활비 (사장도 먹고살아야 한다)
 const LOAN_START = 20000000;   // 창업 대출 (보증금+설비+권리금이 이 돈이었다)
@@ -199,7 +259,6 @@ const FRESH_CAP = 12;     // 이 개수 초과 재고는 매일 밤 30% 폐기 (
 const EVENTS = [
   { id:'franchise', icon:'🏢', name:'대형 프랜차이즈 오픈', days:3, w:3, desc:"옆 골목에 '왕분식' 오픈! 손님 발길이 뜸해져요", end:'🏢 왕분식 철수! 동네 단골의 승리 🎉', on:s=>s.evtGap=1.4, off:s=>s.evtGap=1 },
   { id:'supply', icon:'📦', name:'재료 수급 대란', days:2, w:3, ing:true, end:'📦 도매가 정상화!', on:(s,i)=>s.evtCost[i]=2, off:(s,i)=>delete s.evtCost[i] },
-  { id:'rain', icon:'🌧', name:'비 오는 날', days:1, w:3, desc:'비가 옵니다. 다들 따뜻한 어묵을 찾네요', end:'🌤 비가 갰습니다!', on:s=>{s.evtGap=1.25;s.bias='eomuk';}, off:s=>{s.evtGap=1;s.bias=null;} },
   { id:'viral', icon:'📱', name:'SNS 바이럴', days:1, w:2, desc:'가게 영상이 떡상! 손님이 몰려와요 — 재료는 충분한가요?', end:'📱 열기가 식었습니다', on:s=>s.evtGap=.55, off:s=>s.evtGap=1 },
   { id:'undokai', icon:'🏃', name:'운동회 날', days:1, w:1, desc:'오늘은 K-운동회 날! 배고픈 학생들이 쏟아집니다!', end:'🏃 운동회 끝 — 최고의 하루!', on:s=>s.evtGap=.5, off:s=>s.evtGap=1 },
 ];
@@ -217,9 +276,18 @@ const S = {
   research:null, construction:null,
   weekRev:0, debt:0, regulars:{}, reports:0, suspension:0,
   loan:LOAN_START,
+  wx:null, wxNext:null, vatDue:0, credit:{out:0,book:[]}, creditPolicy:true,
 };
 try { const sv = JSON.parse(localStorage.getItem('bunsik_v3')||'null'); if (sv && sv.day) Object.assign(S, sv); } catch(e) {}
 S.queue = []; S.passerby = null; S.hand = null;   // 휘발 상태는 리셋
+if (!S.credit) S.credit = { out:0, book:[] };     // 구버전 저장 마이그레이션 (현실 패치 v2)
+if (S.creditPolicy == null) S.creditPolicy = true;
+if (!S.vatDue) S.vatDue = 0;
+if (S.activeEvt) {   // 저장된 이벤트는 함수(on/off)를 잃는다 — id로 재연결, 없어진 이벤트(구 '비')는 해제
+  const evDef = EVENTS.find(e => e.id === (S.activeEvt.def && S.activeEvt.def.id));
+  if (evDef) S.activeEvt.def = evDef;
+  else { S.activeEvt = null; S.evtGap = 1; S.bias = null; S.evtCost = {}; }
+}
 S.staffList = (S.staffList || []).map(st => Object.assign({ wage: 41000, owed: 0, glowStart: null, hiredDay: 1 }, st));   // 구버전 저장 마이그레이션
 
 // ═══════════════ 🔊 사운드 (신스 합성 — 에셋 불필요) & 연출 ═══════════════
@@ -297,30 +365,54 @@ function ingCost(id) { return ING[id].cost * (S.evtCost[id]||1); }
 
 // ═══════════════ 손님 ═══════════════
 function spawnGap() {
-  let g = 4.5 * (S.ups.sign?.8:1) * POLICY[S.policy].gap * (1.15 - S.rep*.003) * S.evtGap;
-  if (S.phase==='rush') g *= .4;
+  const cal = calInfo(S.day);
+  let g = 4.5 * (S.ups.sign?.8:1) * POLICY[S.policy].gap * (1.15 - S.rep*.003) * S.evtGap
+        * cal.mul * wxNow().gap;   // 📅 학사일정 × 🌦 날씨가 오늘의 손님을 정한다
+  if (S.phase==='rush') g *= cal.rush;
   if (S.phase==='evening') g *= 1.8;
   return g;
 }
 let custTimer = 3;
+function menuWeight(m) {
+  const mon = calInfo(S.day).m;
+  let w = 1;
+  if (m.id === 'eomuk') {   // 어묵은 계절 음식 — 봄에 팔리고 여름에 죽는다
+    w = ({3:1.2, 4:1, 5:.8, 6:.6, 7:.45, 8:.4})[mon] || 1;
+    w *= wxNow().eomuk || 1;   // 비·꽃샘추위 = 국물 생각, 폭염 = 쳐다도 안 봄
+  }
+  if (m.id === 'gimbap' && (mon === 4 || mon === 5)) w *= 1.25;   // 소풍철 김밥
+  return w;
+}
 function pickOrder() {
   if (S.bias && S.unlocked[S.bias] && Math.random()<.6) return menuById(S.bias);
-  return rnd(MENUS.filter(m => S.unlocked[m.id]));
+  const av = MENUS.filter(m => S.unlocked[m.id]);
+  const tot = av.reduce((a,m) => a + menuWeight(m), 0);
+  let r = Math.random() * tot;
+  for (const m of av) { r -= menuWeight(m); if (r <= 0) return m; }
+  return av[av.length-1];
 }
 function addCustomer(fromFlyer, g, nm) {
   if (S.queue.length >= slots()) return false;
+  // 👵 어르신 손님 — 방학·주말엔 학생 대신 어르신이 가게를 지킨다
+  const school = calInfo(S.day).school;
+  const elderP = school === 'vacation' ? .3 : (school === 'sat' || school === 'sun') ? .2 : .12;
+  const asElder = !fromFlyer && !nm && Math.random() < elderP;
   const gender = g || (Math.random()<.5?'M':'F');
-  let name = nm || (gender==='M'?rnd(NAMES_M):rnd(NAMES_F));
+  let name = nm || (asElder ? rnd(NAMES_E) : (gender==='M'?rnd(NAMES_M):rnd(NAMES_F)));
   // 💜 단골 재방문: 평판이 좋을수록 단골이 자주 온다
   let isReg = false;
   const regNames = Object.keys(S.regulars);
-  if (!nm && regNames.length && Math.random() < .25 + S.rep*.002) {
+  if (!nm && !asElder && regNames.length && Math.random() < .25 + S.rep*.002) {
     name = rnd(regNames); isReg = true;
   } else isReg = !!S.regulars[name];
+  const elder = NAMES_E.includes(name);
   const order = pickOrder();
-  const pat = patience() + (isReg ? 10 : 0);
-  S.queue.push({ name, gender, order, pat, max: pat, reg: isReg });
-  log(`${isReg?'💜 단골 ':''}${gender==='M'?'👦':'👧'} ${name} 학생 도착 — "${order.emoji} ${order.name}${isReg?' 늘 먹던 걸로':''} 주세요!"${fromFlyer?' (전단지 보고 옴!)':''}`, (fromFlyer||isReg)?'g':'d');
+  const pat = patience() + (isReg ? 10 : 0) + (elder ? 15 : 0);   // 어르신은 느긋하다
+  const wantsCredit = elder && Math.random() < .35;   // "사장, 다음에 줄게~"
+  S.queue.push({ name, gender, order, pat, max: pat, reg: isReg, elder, wantsCredit });
+  const face = elder ? (ELDER_F.includes(name)?'👵':'👴') : (gender==='M'?'👦':'👧');
+  if (elder) log(`${isReg?'💜 단골 ':''}${face} ${name} 도착 — "${order.emoji} ${order.name} 하나 줘 봐요"`, isReg?'g':'d');
+  else log(`${isReg?'💜 단골 ':''}${face} ${name} 학생 도착 — "${order.emoji} ${order.name}${isReg?' 늘 먹던 걸로':''} 주세요!"${fromFlyer?' (전단지 보고 옴!)':''}`, (fromFlyer||isReg)?'g':'d');
   return true;
 }
 
@@ -355,7 +447,7 @@ function miniTap() {
     const avg = mini.scores.reduce((a,b)=>a+b,0)/mini.scores.length;
     let q = avg>=.8?3:avg>=.5?2:1;
     const id = mini.id;
-    S.stock[id]--; S.cond = Math.max(0, S.cond-3); checkCond();
+    S.stock[id]--; S.cond = Math.max(0, S.cond - 3 - (wxNow().cook || 0)); checkCond();   // 🥵 폭염의 불 앞은 지옥
     S.skill[id] = (S.skill[id]||0)+1;
     if ((S.prepped[id]||0) > 0) { S.prepped[id]--; q = Math.min(3, q+1); log('🔪 손질해둔 재료라 더 잘 나왔다! +⭐', 'y'); }
     S.hand = { id, q };
@@ -377,18 +469,31 @@ function serve(i) {
   S.combo = (now - S.comboAt < 20) ? S.combo+1 : 1; S.comboAt = now;
   const cb = Math.min(2500, (S.combo-1)*500);
   const gross = price+tip+cb;
-  const fee = Math.ceil(gross * CARD_FEE);
-  S.money += gross - fee; S.led.rev += gross; S.led.spend += fee; S.led.cardFee = (S.led.cardFee||0) + fee;
+  let paidNow = gross, fee = 0;
+  if (c.elder && c.wantsCredit && S.creditPolicy) {
+    // 📒 외상 — 돈은 안 들어오지만 관계가 쌓인다
+    paidNow = 0;
+    S.credit.out += price; S.credit.book.push({ name: c.name, amt: price, day: S.day });
+    log(`📒 ${c.name}: "맛있게 먹었어요~ 다음에 줄게" — 외상 장부에 ${fmt(price)} (누적 ${fmt(S.credit.out)})`, 'y');
+  } else if (c.elder) {
+    // 👵 어르신은 꼬깃한 현금 — 카드 수수료가 없다
+    S.money += gross; S.led.rev += gross;
+    if (c.wantsCredit && !S.creditPolicy) { S.rep = Math.max(0, S.rep-1); log(`😐 ${c.name}: "외상도 안 되고… 야박하네" (현금은 냈지만 평판 -1)`, 'd'); }
+  } else {
+    fee = Math.ceil(gross * CARD_FEE);
+    S.money += gross - fee; S.led.rev += gross; S.led.spend += fee; S.led.cardFee = (S.led.cardFee||0) + fee;
+  }
   S.led.served++;
   if (q===3) S.rep = Math.min(100, S.rep+2); else if (q===2) S.rep = Math.min(100, S.rep+1);
-  // 💜 단골 등록: 좋은 경험(★2+)을 한 학생은 단골이 될 수 있다
-  if (q >= 2 && !S.regulars[c.name] && Math.random() < .35) {
+  // 💜 단골 등록: 좋은 경험(★2+)을 한 손님은 단골이 될 수 있다 (외상 거절당한 어르신은 예외)
+  const canReg = !(c.elder && c.wantsCredit && !S.creditPolicy);
+  if (q >= 2 && !S.regulars[c.name] && canReg && Math.random() < (c.elder ? .5 : .35)) {
     S.regulars[c.name] = { visits: 1 };
-    log(`💜 ${c.name} 학생이 단골이 됐다! (다음부터 참을성 있게 기다리고 잔돈도 잘 준다)`, 'y');
+    log(`💜 ${c.name}${c.elder?'이(가)':' 학생이'} 단골이 됐다! (다음부터 참을성 있게 기다리고 잔돈도 잘 준다)`, 'y');
   } else if (S.regulars[c.name]) { S.regulars[c.name].visits++; }
   let react = QUAL.react[q-1]; if (q===3) react = react.replace('%s', c.order.name);
-  log(`💰 ${c.name}: "${react}" +${fmt(price)}${tip?` 잔돈+${tip}`:''}${cb?` 콤보+${cb}`:''}${S.combo>=2?` 🔥x${S.combo}`:''}`, 'g');
-  SFX.coin(); fx('+' + fmt(gross - fee), q === 3 ? '#ffd700' : '#aef0b8');
+  if (paidNow) log(`💰 ${c.name}: "${react}" +${fmt(price)}${tip?` 잔돈+${tip}`:''}${cb?` 콤보+${cb}`:''}${S.combo>=2?` 🔥x${S.combo}`:''}${c.elder?' (현금 💵)':''}`, 'g');
+  SFX.coin(); fx(paidNow ? '+' + fmt(paidNow - fee) : '📒 외상', q === 3 ? '#ffd700' : '#aef0b8');
   if (S.combo >= 3) fx('🔥 x' + S.combo, '#ff9a5a');
   S.queue.splice(i,1); S.hand = null;
   if (++S.servesSinceStain >= 3 && S.dirt < 6) { S.servesSinceStain = 0; S.dirt++; log('🧹 바닥에 얼룩이 생겼다… (' + S.dirt + '개)', 'd'); }
@@ -407,6 +512,7 @@ function flyerRate(g) {
   let r = .4 + S.rep*.002;
   const st = STYLES[S.style];
   if (st.g==='all' || st.g===g) r += st.b;
+  r *= wxNow().flyer || 1;   // 🌧 비 오는 날 전단지는 젖는다
   return Math.min(.9, r);
 }
 function passerbyTick(dt) {
@@ -418,7 +524,7 @@ function passerbyTick(dt) {
   if (!isOpen()) return;
   pbTimer -= dt;
   if (pbTimer <= 0) {
-    pbTimer = 12 + Math.random()*6;
+    pbTimer = (12 + Math.random()*6) * (wxNow().pb || 1);   // 궂은 날엔 행인도 없다
     const gender = Math.random()<.5?'M':'F';
     S.passerby = { gender, name: gender==='M'?rnd(NAMES_M):rnd(NAMES_F), left:6 };
     // 현수막/시식 자발 판정
@@ -496,7 +602,11 @@ function eventTick(dt) {
     render(); return;
   }
   if (!S.activeEvt && S.evtCd<=0 && Math.random() < (biz?.09:.05)) {
-    const pool = []; EVENTS.forEach(e => { for(let i=0;i<e.w;i++) pool.push(e); });
+    const school = calInfo(S.day).school;
+    const pool = []; EVENTS.forEach(e => {
+      if (e.id === 'undokai' && school !== 'semester') return;   // 방학·주말에 운동회는 없다
+      for(let i=0;i<e.w;i++) pool.push(e); });
+    if (!pool.length) return;
     const def = rnd(pool);
     const ing = def.ing ? rnd(Object.keys(S.unlocked)) : null;
     S.activeEvt = { def, left:def.days, ing };
@@ -519,8 +629,39 @@ function setPhase(p) {
   document.body.classList.add('ph-' + p);
   const names = { dawn:'🌅 새벽 — 준비 시간', open:'☀️ 영업 중', rush:'🔔 하교 러시!', evening:'🌆 저녁 — 언제 닫을까', night:'🌙 마감' };
   log(`━━ ${names[p]} ━━`, 'y');
-  if (p==='rush') news('🔔 하교 시간! 손님 러시!');
+  if (p==='rush') {
+    const sc = calInfo(S.day).school;
+    if (sc === 'vacation') news('🏖 방학의 오후 — 하교 러시는 없다. 조용하다…');
+    else if (sc === 'sat' || sc === 'sun') news('🛍 주말 오후 — 드문드문 나들이 손님뿐');
+    else if (sc === 'exam') news('✏️ 시험기간 — 학생들이 바로 학원으로 가버린다');
+    else news('🔔 하교 시간! 손님 러시!');
+  }
   if (p==='dawn') {
+    // 📅 오늘의 달력·날씨 — 학교 앞 사장의 아침은 달력 확인부터
+    const cal = calInfo(S.day);
+    S.wx = (S.wxNext && S.wxNext.day === S.day) ? S.wxNext : rollWx(S.day);
+    const w = wxNow();
+    log(`📅 ${cal.m}월 ${cal.d}일 (${cal.wdName}) · ${w.icon} ${w.name}${cal.badge ? ' · ' + cal.badge : ''}`, 'y');
+    if (S.day === 141) news('🏖 여름방학 시작!! 한 달간 학생들이 사라진다 — 현금은 준비됐는가, 사장님');
+    if (S.day === 171) news('🏫 개학!! 학생들이 돌아왔다 — 밀린 떡볶이 수요가 몰려온다 🎉');
+    if (S.day === 57 || S.day === 117) news('✏️ 시험기간 시작 — 손님이 줄어든다 (마지막 날엔 해방 특수!)');
+    if (S.day === 60 || S.day === 121) news('🎉 시험 끝나는 날!! 해방된 학생들이 몰려온다 — 재고 쟁였는가!');
+    if (w.id === 'rain') log('🌧 비 오는 날 — 홀 손님은 줄지만, 다들 따뜻한 어묵 국물을 찾는다', 'd');
+    if (w.id === 'heat') log('🥵 폭염 — 손님도 없고 불 앞은 지옥이다. 몸 관리 조심', 'd');
+    // 📒 외상 회수 — 어르신들은 아침에 꼬깃한 지폐를 들고 온다
+    if (S.credit.book.length) {
+      for (let i = S.credit.book.length - 1; i >= 0; i--) {
+        const e = S.credit.book[i];
+        if (Math.random() < .3) {
+          S.money += e.amt + 500; S.led.rev += e.amt; S.credit.out -= e.amt; S.credit.book.splice(i, 1);
+          S.rep = Math.min(100, S.rep + 1);
+          log(`📒💵 ${e.name}이(가) 외상값 ${fmt(e.amt)}을 갚았다 (+잔돈 500원) "잘 먹었어요, 사장"`, 'g');
+        } else if (S.day - e.day > 21 && Math.random() < .1) {
+          S.credit.out -= e.amt; S.credit.book.splice(i, 1);
+          log(`📒 ${e.name}의 외상 ${fmt(e.amt)}… 3주가 지났다. 못 받을 돈이 된 것 같다`, 'b');
+        }
+      }
+    }
     if (S.construction) {
       log(`🏗 공사 중 (${S.construction.daysLeft}일 남음) — 오늘은 영업할 수 없다. 알바 일당은 나간다…`, 'b');
     } else {
@@ -565,13 +706,20 @@ function doNight() {
       log(`🥬 ${ING[id].name} ${waste}개가 신선도가 떨어져 폐기했다… (원가 ${fmt(waste*ING[id].cost)} 손실)`, 'b');
     }
   });
-  // 🏠 주간 고지서: 7일마다 월세 + 부가세 (번 돈이 다 내 돈이 아니다)
+  // 💬 좁은 동네의 좋은 소문 — 하루를 완벽히 보내면 칭찬이 돈다
+  if (L.served >= 18 && !L.missed) {
+    S.rep = Math.min(100, S.rep + 3);
+    log('💬 "고 집 참 잘하네" — 동네에 칭찬이 돌았다 (평판 +3)', 'g');
+  }
+  // 🏠 주간 고지서: 7일마다 (번 돈이 다 내 돈이 아니다) — 부가세는 간이과세라 쌓아뒀다 7월에 온다
   S.weekRev += L.rev;
   if (S.day % 7 === 0) {
-    const vat = Math.ceil(S.weekRev * VAT);
+    const vatAcc = Math.ceil(S.weekRev * VAT_SIMPLE);
+    S.vatDue += vatAcc;
     const interest = Math.ceil(S.loan * LOAN_RATE);
-    const bill = RENT + vat + UTIL + interest + LIVING;
-    log(`🧾📮 주간 고지서! 임대료 ${fmt(RENT)} + 공과금 ${fmt(UTIL)} + 부가세 ${fmt(vat)} + 대출이자 ${fmt(interest)} + 생활비 ${fmt(LIVING)} = ${fmt(bill)}`, 'y');
+    const bill = RENT + UTIL + interest + LIVING;
+    log(`🧾📮 주간 고지서! 임대료 ${fmt(RENT)} + 공과금 ${fmt(UTIL)} + 대출이자 ${fmt(interest)} + 생활비 ${fmt(LIVING)} = ${fmt(bill)}`, 'y');
+    if (vatAcc) log(`🧾 부가세 적립 +${fmt(vatAcc)} (간이과세 — 누적 ${fmt(S.vatDue)}, 7월 25일에 고지서가 온다. 쓰지 말고 모아두자)`, 'd');
     if (S.money >= bill) { S.money -= bill; L.spend += bill; }
     else {
       const short = bill - S.money;
@@ -579,6 +727,17 @@ function doNight() {
       log(`💸 잔고 부족! ${fmt(short)}이 빚으로 남았다… (빚이 있으면 매일 평판이 깎인다)`, 'b');
     }
     S.weekRev = 0;
+  }
+  // 🧾💥 7월 25일 — 부가세 예정고지. 모아둔 사장만 웃는 날
+  if (S.day === VAT_BILL_DAY && S.vatDue > 0) {
+    const vat = S.vatDue; S.vatDue = 0;
+    news(`🧾💥 부가세 예정고지!! ${fmt(vat)} — 넉 달 치가 한 번에 왔다`);
+    if (S.money >= vat) { S.money -= vat; L.spend += vat; log(`🧾 부가세 ${fmt(vat)} 납부 완료 — 모아둔 보람이 있다`, 'y'); }
+    else {
+      const short = vat - S.money;
+      L.spend += S.money; S.money = 0; S.debt += short;
+      log(`🧾💸 부가세 낼 돈이 없다!! ${fmt(short)}이 빚으로… (방학 직후의 세금 폭탄 — 이래서 모아두라 했건만)`, 'b');
+    }
   }
   // 빚 상환/압박
   if (S.debt > 0) {
@@ -659,11 +818,19 @@ function doNight() {
   if (S.cond < 30) tips.push('💡 몸도 자원 — 내일은 무리하지 말기');
   if (S.dirt >= 3) tips.push('💡 얼룩을 치우세요 — 단속 뜨면 벌금');
   if (!L.fTry) tips.push('💡 한가할 땐 전단지를 돌려보세요');
+  // 🌦 내일 예보 — 사장의 진짜 무기는 준비
+  S.wxNext = rollWx(S.day + 1);
+  const tmr = calInfo(S.day + 1), tw = WX[S.wxNext.id];
+  let fc = `📅 내일: ${tmr.m}월 ${tmr.d}일(${tmr.wdName}) · ${tw.icon} ${tw.name}${tmr.badge ? ' · ' + tmr.badge : ''}`;
+  if (S.day + 1 === 141) fc += ' — ⚠️ 여름방학 시작!';
+  if (S.day + 1 === VAT_BILL_DAY) fc += ` — ⚠️ 부가세 고지 ${fmt(S.vatDue)}!`;
+  if (tw.id === 'rain') fc += ' (어묵 준비!)';
   $('ledgerBody').innerHTML = `<h2>🧾 영업 ${S.day}일차 정산</h2>
 매출 <b>${fmt(L.rev)}</b> · 지출 <b>-${fmt(L.spend)}</b><br>─────────────<br>순이익 <b style="color:${profit>=0?'#3a7a3a':'#b04040'}">${profit>=0?'+':''}${fmt(profit)}</b><br><br>
 서빙 ${L.served}명 · 놓침 ${L.missed}명<br>📣 전단지 ${L.fHit}/${L.fTry} (${rate}%) · 🪧 ${L.bHit} · 🍡 ${L.tHit}<br>
 정책 ${POLICY[S.policy].name} · ⭐평판 ${Math.floor(S.rep)} · 재료 ${stockLeft}개 · ♥${Math.floor(S.cond)}<br>
-${wages?`💸 인건비 ${fmt(wages)} `:''}${branchGain?`🏪 2호점 +${fmt(branchGain)}`:''}<br><br>
+${wages?`💸 인건비 ${fmt(wages)} `:''}${branchGain?`🏪 2호점 +${fmt(branchGain)}`:''}${S.credit.out>0?` · 📒외상 ${fmt(S.credit.out)}`:''}${S.vatDue>0?` · 🧾부가세 적립 ${fmt(S.vatDue)}`:''}<br><br>
+<b>${fc}</b><br><br>
 ${tips[0]||'💡 내일도 화이팅!'}<br><button onclick="nextDay()">💤 자고 일어나기</button>`;
   D('closing', `순익 ${profit} 서빙 ${L.served} 놓침 ${L.missed} 전단지 ${L.fHit}/${L.fTry}`);
   $('ledger').style.display = 'flex';
@@ -678,7 +845,8 @@ function nextDay() {
 <b style="font-size:22px">최종 순자산 ${fmt(asset)}</b><br>
 (현금 ${fmt(S.money)} + 설비·투자 + 재고 − 빚)<br><br>
 ⭐평판 ${Math.floor(S.rep)} · 💜단골 ${Object.keys(S.regulars).length}명 · 🧑알바 ${S.staffList.length}명<br>
-🚨 노동청 신고 ${S.reports}회 · 🏪 2호점 ${S.branch?'달성!':'미달성'} · 🏦 대출 ${S.loan>0?fmt(S.loan)+' 남음':'완제!'}<br><br>
+🚨 노동청 신고 ${S.reports}회 · 🏪 2호점 ${S.branch?'달성!':'미달성'} · 🏦 대출 ${S.loan>0?fmt(S.loan)+' 남음':'완제!'}<br>
+${S.credit.out>0?`📒 못 받은 외상 ${fmt(S.credit.out)} (80%만 자산 인정) · `:''}${S.vatDue>0?`🧾 부가세 예정 -${fmt(S.vatDue)}`:''}<br><br>
 <input id="nickInput" placeholder="닉네임 (2~12자)" maxlength="12" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #ccc;margin:6px 0"><br>
 <button onclick="submitScore()">🏆 순위표에 제출!</button>
 <button onclick="exportLedger()">📜 시즌 일지 내보내기</button>
@@ -720,6 +888,9 @@ const A = {
   policy() { const i = POLICY_ORDER.indexOf(S.policy); S.policy = POLICY_ORDER[(i+1)%3]; log(`💲 가격 정책: ${POLICY[S.policy].name}`); render(); },
   style() { const i = STYLE_ORDER.indexOf(S.style); S.style = STYLE_ORDER[(i+1)%3]; log(`오늘의 스타일: ${STYLES[S.style].name}`); render(); },
   rest() { S.resting = !S.resting; log(S.resting?'🪑 의자에 앉아 쉰다… (회복 3배)':'다시 일어났다!'); render(); },
+  credit() { S.creditPolicy = !S.creditPolicy;
+    log(S.creditPolicy ? '📒 외상을 받기로 했다 — 대부분 갚지만, 가끔 못 받는다. 대신 어르신 단골이 늘 것이다'
+                       : '📒 외상 사절! — 떼일 걱정은 없지만, 어르신들이 서운해한다', 'y'); render(); },
   unlock(id) { const m = menuById(id); if (S.money<m.unlock) return log(`${m.name} 설비는 ${fmt(m.unlock)}!`,'b');
     S.money-=m.unlock; S.led.spend+=m.unlock; S.unlocked[id]=true; log(`${m.emoji} ${m.name} 설비 설치 완료!! 새 메뉴 개시`,'g'); render(); },
   upgrade() { const up = UPGRADES[S.upIdx]; if (!up) return; if (S.money<up.cost) return log(`${up.name}은 ${fmt(up.cost)}!`,'b');
@@ -781,11 +952,13 @@ const A = {
 // ═══════════════ 렌더 ═══════════════
 function render() {
   const pn = { dawn:'🌅 새벽', open:'☀️ 영업', rush:'🔔 러시!', evening:'🌆 저녁', night:'🌙 마감' };
-  $('topbar').innerHTML = `<b>${S.day}/${SEASON_DAYS}일</b> ${pn[S.phase]} <span class="tag">(${Math.ceil(S.phaseLeft)}초)</span>
+  const cal = calInfo(S.day), w = wxNow();
+  $('topbar').innerHTML = `<b>${cal.m}/${cal.d}(${cal.wdName})</b> ${w.icon} ${pn[S.phase]} <span class="tag">D${S.day}/${SEASON_DAYS} · ${Math.ceil(S.phaseLeft)}초</span>
+    ${cal.badge?`<span style="color:var(--gold)">${cal.badge}</span>`:''}
     ${S.activeEvt?`<span style="color:var(--gold)">${S.activeEvt.def.icon}${S.activeEvt.def.name}</span>`:''}
     <span style="margin-left:auto"><b>💰 ${fmt(S.money)}</b></span>`;
   $('statbar').innerHTML = `♥<span class="meter"><i style="width:${S.cond}%;background:${S.cond<30?'#e88a7a':'#7fd18a'}"></i></span>
-    ${S.loan>0?`<span style="color:#e8a15a">🏦${Math.round(S.loan/10000)}만</span>`:'🎉완제'} ⭐${Math.floor(S.rep)} 💜${Object.keys(S.regulars).length} 🧹${S.dirt>0?`얼룩${S.dirt}`:'깨끗'} 📣${S.flyers}장 ${S.debt>0?`<span style="color:var(--bad)">💳빚 ${fmt(S.debt)}</span>`:''} ${S.sick?'🤒몸살!':''} ${S.resting?'🪑쉬는 중':''}
+    ${S.loan>0?`<span style="color:#e8a15a">🏦${Math.round(S.loan/10000)}만</span>`:'🎉완제'} ⭐${Math.floor(S.rep)} 💜${Object.keys(S.regulars).length} ${S.credit.out>0?`📒${Math.round(S.credit.out/1000)}천`:''} ${S.vatDue>0?`🧾${Math.round(S.vatDue/10000)}만`:''} 🧹${S.dirt>0?`얼룩${S.dirt}`:'깨끗'} 📣${S.flyers}장 ${S.debt>0?`<span style="color:var(--bad)">💳빚 ${fmt(S.debt)}</span>`:''} ${S.sick?'🤒몸살!':''} ${S.resting?'🪑쉬는 중':''}
     <span style="margin-left:auto" class="tag">${POLICY[S.policy].name}·${STYLES[S.style].name}</span>`;
   $('queue').innerHTML = S.queue.map((c,i) => {
     const match = S.hand && S.hand.id===c.order.id;
@@ -827,6 +1000,7 @@ function render() {
     <button onclick="A.policy()">💲 가격: ${POLICY[S.policy].name}</button>
     <button onclick="A.style()">🧢 ${STYLES[S.style].name}</button>
     <button class="${S.resting?'on':''}" onclick="A.rest()">🪑 ${S.resting?'일어나기':'쉬기'}</button>
+    <button class="${S.creditPolicy?'on':''}" onclick="A.credit()">📒 외상 ${S.creditPolicy?'받음':'사절'}</button>
     <div class="grp">🎯 투자와 꿈</div>
     ${up?`<button onclick="A.upgrade()">⬆ ${up.name} ${fmt(up.cost)}<br><span class="tag">${up.desc}</span></button>`:''}
     ${DREAMS.filter(dreamAvail)
@@ -986,8 +1160,10 @@ function gameTick(dt) {
         SFX.bad(); fx('💢 ' + c.name + ' 놓침!', '#ff8a7a');
         if (c.reg) { log(`💔 단골 ${c.name}을(를) 놓쳤다!! "여기 변했네…" (단골 이탈, 평판 -5)`, 'b');
           delete S.regulars[c.name]; S.rep=Math.max(0,S.rep-5); }
-        else { log(`💢 ${c.name} 학생이 화나서 가버렸다! (콤보 끊김, 평판 -3)`, 'b'); S.rep=Math.max(0,S.rep-3); }
-        S.queue.splice(i,1); S.led.missed++; S.combo=0; changed=true; }
+        else { log(`💢 ${c.name}${c.elder?'이(가)':' 학생이'} 화나서 가버렸다! (콤보 끊김, 평판 -3)`, 'b'); S.rep=Math.max(0,S.rep-3); }
+        S.queue.splice(i,1); S.led.missed++; S.combo=0; changed=true;
+        // 💬 좁은 동네, 나쁜 소문은 하루면 다 돈다
+        if (S.led.missed === 3) { S.rep = Math.max(0, S.rep-4); news('💬 "거기 요즘 왜 이래?" — 오늘만 세 명을 놓쳤다. 소문이 돈다 (평판 -4)'); } }
     }
     if (changed) render();
   }
@@ -1016,6 +1192,7 @@ setInterval(() => {
 
 log('🍢 K-분식집에 오신 것을 환영합니다! (방과후 스튜디오 — 웹 로그 프로토타입)', 'y');
 log(`🏦 창업 대출 ${fmt(LOAN_START)}과 함께 시작합니다 — 보증금·설비·권리금이 이 돈이었죠. 매주 이자가 나갑니다`, 'b');
+log('📅 3월 2일 개학날 개업 — 학교 앞 장사는 학사일정이 반입니다. 여름방학(7/20~)을 조심하세요', 'd');
 log('새벽입니다. 재료를 준비하고 🔔 종을 쳐서 문을 여세요.', 'd');
 setPhase(S.phase === 'dawn' ? 'dawn' : 'dawn');
 render();
