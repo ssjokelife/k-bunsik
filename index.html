@@ -105,7 +105,8 @@ button.on { border-color:var(--gold); color:var(--gold); }
 <div id="guide"><div class="paper">
 <h2>🍢 K-분식집 가이드</h2>
 <b>당신은 학교 앞 분식집 사장님.</b> 창업 대출 <b>2,000만원</b>을 안고 시작합니다.
-시즌(180일) 뒤 <b>순자산</b>으로 순위를 겨뤄요 — 🤖 AI 사장은 1,250만원 벌었고, 3판 중 1판은 파산했습니다.
+시즌(180일) 뒤 <b>순자산</b>으로 순위를 겨뤄요. 창업 첫 6개월의 진짜 점수는 <b>빚(2,000만)을 얼마나 줄였는가</b> —
+🤖 AI 사장(모범 운영)도 시즌 말 <b>-1,043만</b>입니다. 월소득 259만, 통계청이 말하는 자영업의 현실 그대로예요.
 <h3>📅 하루의 흐름</h3>
 🌅 <b>새벽</b>: 재료 📦 사고 · 🔪 손질하고 · 🧹 청소 → <b>🔔 종을 치면 개점!</b><br>
 ☀️ <b>영업</b>: 조리하고 서빙 → 🔔 <b>하교 러시</b>(대목!) → 🌆 저녁 → 🔔 종으로 마감 → 🧾 정산
@@ -317,6 +318,7 @@ if (!S.stockLots) {   // v2.1: 재고를 수명 로트로 변환
 S.saleStreak = S.saleStreak || 0;
 S.poolDone = false;
 if (S.closeoutPending == null) S.closeoutPending = false;
+if (S.broken == null) { S.broken = false; S.brokenCost = 0; }
 if (S.activeEvt) {   // 저장된 이벤트는 함수(on/off)를 잃는다 — id로 재연결, 없어진 이벤트(구 '비')는 해제
   const evDef = EVENTS.find(e => e.id === (S.activeEvt.def && S.activeEvt.def.id));
   if (evDef) S.activeEvt.def = evDef;
@@ -504,6 +506,7 @@ function miniTap() {
     S.skill[id] = (S.skill[id]||0)+1;
     if ((S.prepped[id]||0) > 0) { S.prepped[id]--; q = Math.min(3, q+1); log('🔪 손질해둔 재료라 더 잘 나왔다! +⭐', 'y'); }
     if (age >= LIFE[id]-1 && q > 2) { q = 2; log('🥬 오늘까지인 재료다… 맛이 어제만 못하다 (품질 상한 ⭐⭐)', 'd'); }
+    if (S.broken) q = 1;   // 🔧 고장난 화구로는 뭘 해도 엉망
     S.hand = { id, q };
     log(`${menuById(id).emoji} ${menuById(id).name} 완성 ${'⭐'.repeat(q)} (숙련 ${S.skill[id]})`);
     $('mini').style.display = 'none'; mini = null; render();
@@ -521,7 +524,8 @@ function serve(i) {
   const tip = Math.random()<tipC ? 500 : 0;   // "잔돈은 됐어요!"
   const now = Date.now()/1000;
   S.combo = (now - S.comboAt < 20) ? S.combo+1 : 1; S.comboAt = now;
-  const cb = Math.min(2500, (S.combo-1)*500);
+  const cb = Math.min(500, (S.combo-1)*250);   // 콤보는 잔돈 — 진짜 보상은 돈이 아니라 흐름(평판·입소문)
+  if (S.combo >= 5 && S.combo % 5 === 0) S.rep = Math.min(100, S.rep + 1);   // "저 집 회전 봐라" 소문
   const gross = price+tip+cb;
   let paidNow = gross, fee = 0;
   if (c.elder && c.wantsCredit && S.creditPolicy) {
@@ -556,7 +560,10 @@ function serve(i) {
 
 // ═══════════════ 컨디션/청소/휴식 ═══════════════
 function checkCond() {
-  if (S.cond <= 0 && !S.sick) { S.sick = true; S.rep = Math.max(0, S.rep-5); log('🤒 몸살이 났다! 조리 불가 — 쉬어야 한다 (평판 -5)', 'b'); }
+  if (S.cond <= 0 && !S.sick) { S.sick = true; S.rep = Math.max(0, S.rep-5); log('🤒 몸살이 났다! 조리 불가 — 쉬어야 한다 (평판 -5)', 'b');
+    if (Math.random() < .3) { const h = 100000 + Math.floor(Math.random()*3)*50000;
+      S.money = Math.max(0, S.money - h); S.led.spend += h;
+      log(`🏥 결국 병원행… 진료비 ${fmt(h)}. 몸이 자본이다 — 1인 가게의 최대 리스크`, 'b'); } }
   if (S.sick && S.cond >= 25) { S.sick = false; log('💪 몸이 좀 나아졌다!', 'g'); }
 }
 
@@ -616,7 +623,8 @@ function staffTick(dt) {
       if (i >= 0) {
         const c = S.queue[i];
         takeStock(c.order.id);
-        const star = staffStar(halls[0]);   // 근속이 실력이 된다
+        let star = staffStar(halls[0]);   // 근속이 실력이 된다
+        if (S.broken) star = 1;
         const price = Math.ceil(menuPrice(c.order) * QUAL.mul[star-1] * POLICY[S.policy].mul);
         const fee = Math.ceil(price * CARD_FEE);
         S.money += price - fee; S.led.rev += price; S.led.spend += fee; S.led.cardFee = (S.led.cardFee||0) + fee;
@@ -702,6 +710,11 @@ function setPhase(p) {
     if (S.day === 60 || S.day === 121) news('🎉 시험 끝나는 날!! 해방된 학생들이 몰려온다 — 재고 쟁였는가!');
     if (w.id === 'rain') log('🌧 비 오는 날 — 홀 손님은 줄지만, 다들 따뜻한 어묵 국물을 찾는다', 'd');
     if (w.id === 'heat') log('🥵 폭염 — 손님도 없고 불 앞은 지옥이다. 몸 관리 조심', 'd');
+    // 🔧 설비는 예고 없이 죽는다 — 자영업 목돈 지출의 근원 (파산의 씨앗)
+    if (!S.broken && S.day > 7 && Math.random() < .013) {
+      S.broken = true; S.brokenCost = (3 + Math.floor(Math.random() * 6)) * 100000;
+      news(`🔧 조리대 화구 고장!! 수리비 ${fmt(S.brokenCost)} — 고치기 전까지 요리가 엉망이 된다 (품질 ⭐ 상한)`);
+    }
     // 🚶 오늘의 수요 풀 확정 — 지방 상권의 하루 상한
     S.pool = rollPool(); S.poolDone = false;
     const p0 = S.pool.students + S.pool.locals;
@@ -942,7 +955,8 @@ function nextDay() {
     const asset = assetValue();
     $('ledgerBody').innerHTML = `<h2>🏁 시즌 종료 — ${SEASON_DAYS}일 완주!</h2>
 <b style="font-size:22px">최종 순자산 ${fmt(asset)}</b><br>
-(현금 ${fmt(S.money)} + 설비·투자 + 재고 − 빚)<br><br>
+(현금 ${fmt(S.money)} + 설비·투자 + 재고 − 빚)<br>
+<span class="tag">창업 대출 2,000만에서 시작한 첫 6개월 — 빚을 줄인 만큼이 실력입니다 (🤖 AI 사장: -1,043만)</span><br><br>
 ⭐평판 ${Math.floor(S.rep)} · 💜단골 ${Object.keys(S.regulars).length}명 · 🧑알바 ${S.staffList.length}명<br>
 🚨 노동청 신고 ${S.reports}회 · 🏪 2호점 ${S.branch?'달성!':'미달성'} · 🏦 대출 ${S.loan>0?fmt(S.loan)+' 남음':'완제!'}<br>
 ${S.credit.out>0?`📒 못 받은 외상 ${fmt(S.credit.out)} (80%만 자산 인정) · `:''}${S.vatDue>0?`🧾 부가세 예정 -${fmt(S.vatDue)}`:''}<br><br>
@@ -987,6 +1001,10 @@ const A = {
   policy() { const i = POLICY_ORDER.indexOf(S.policy); S.policy = POLICY_ORDER[(i+1)%3]; log(`💲 가격 정책: ${POLICY[S.policy].name}`); render(); },
   style() { const i = STYLE_ORDER.indexOf(S.style); S.style = STYLE_ORDER[(i+1)%3]; log(`오늘의 스타일: ${STYLES[S.style].name}`); render(); },
   rest() { S.resting = !S.resting; log(S.resting?'🪑 의자에 앉아 쉰다… (회복 3배)':'다시 일어났다!'); render(); },
+  repair() { if (!S.broken) return;
+    if (S.money < S.brokenCost) return log(`수리비 ${fmt(S.brokenCost)}이 없다… 고장난 화구로 버티는 중 (품질 ⭐)`, 'b');
+    S.money -= S.brokenCost; S.led.spend += S.brokenCost; S.broken = false;
+    log(`🔧 수리 기사 방문 — ${fmt(S.brokenCost)} 들었다. 화구가 되살아났다!`, 'g'); render(); },
   credit() { S.creditPolicy = !S.creditPolicy;
     log(S.creditPolicy ? '📒 외상을 받기로 했다 — 대부분 갚지만, 가끔 못 받는다. 대신 어르신 단골이 늘 것이다'
                        : '📒 외상 사절! — 떼일 걱정은 없지만, 어르신들이 서운해한다', 'y'); render(); },
@@ -1100,6 +1118,7 @@ function render() {
     <button onclick="A.style()">🧢 ${STYLES[S.style].name}</button>
     <button class="${S.resting?'on':''}" onclick="A.rest()">🪑 ${S.resting?'일어나기':'쉬기'}</button>
     <button class="${S.creditPolicy?'on':''}" onclick="A.credit()">📒 외상 ${S.creditPolicy?'받음':'사절'}</button>
+    ${S.broken?`<button style="border-color:var(--bad)" onclick="A.repair()">🔧 수리 ${fmt(S.brokenCost)}</button>`:''}
     <div class="grp">🎯 투자와 꿈</div>
     ${up?`<button onclick="A.upgrade()">⬆ ${up.name} ${fmt(up.cost)}<br><span class="tag">${up.desc}</span></button>`:''}
     ${DREAMS.filter(dreamAvail)
@@ -1181,7 +1200,7 @@ async function refreshBoard() {
 function renderRankbar() {
   const el = document.getElementById('rankbar');
   if (!el) return;
-  const rows = [...(boardCache || []), { nickname: '🤖 AI 사장', asset: 12500000 }]
+  const rows = [...(boardCache || []), { nickname: '🤖 AI 사장', asset: -10430000 }]
     .sort((a, b) => b.asset - a.asset);
   const my = assetValue();
   let rank = rows.findIndex(r => my >= r.asset);
@@ -1204,7 +1223,7 @@ window.showBoard = async () => {
     });
     if (!r.ok) { log('🏆 순위표를 불러올 수 없어요 (서버 준비 중 — ' + r.status + ')', 'b'); return; }
     const rows = await r.json();
-    const aiLine = { nickname: '🤖 AI 사장', asset: 12500000, day: 180, branch: false };
+    const aiLine = { nickname: '🤖 AI 사장', asset: -10430000, day: 180, branch: false };
     const all = [...rows, aiLine].sort((a, b) => b.asset - a.asset);
     document.getElementById('ledgerBody').innerHTML = '<h2>🏆 시즌 1 순위표</h2>' +
       (all.map((r2, i) => `${i+1}위 <b>${r2.nickname}</b> — ${fmt(r2.asset)} <span class="tag">(${r2.day}일${r2.branch?' · 🏪2호점':''})</span>`).join('<br>') || '아직 기록 없음') +
