@@ -106,7 +106,8 @@ button.on { border-color:var(--gold); color:var(--gold); }
 <h2>🍢 K-분식집 가이드</h2>
 <b>당신은 학교 앞 분식집 사장님.</b> 창업 대출 <b>2,000만원</b>을 안고 시작합니다.
 시즌(180일) 뒤 <b>순자산</b>으로 순위를 겨뤄요. 창업 첫 6개월의 진짜 점수는 <b>빚(2,000만)을 얼마나 줄였는가</b> —
-🤖 AI 사장(모범 운영)도 시즌 말 <b>-1,043만</b>입니다. 월소득 259만, 통계청이 말하는 자영업의 현실 그대로예요.
+🤖 AI 사장(모범 운영)도 시즌 말 <b>-1,135만</b>입니다. 월소득 234만 — 통계청 소상공인 평균(208만)의 현실 그대로예요.
+<a href="sim.html" style="color:#8fb8e8">📊 AI 6유형 × 60시즌 현실성 리포트 보기</a>
 <h3>📅 하루의 흐름</h3>
 🌅 <b>새벽</b>: 재료 📦 사고 · 🔪 손질하고 · 🧹 청소 → <b>🔔 종을 치면 개점!</b><br>
 ☀️ <b>영업</b>: 조리하고 서빙 → 🔔 <b>하교 러시</b>(대목!) → 🌆 저녁 → 🔔 종으로 마감 → 🧾 정산
@@ -234,11 +235,11 @@ const NAMES_E = ['순자 할머니','병철 할아버지','말순 할머니','�
 const ELDER_F = ['순자 할머니','말순 할머니','정심 이모'];
 
 // ═══════ 🚶 일일 수요 풀 — 지방 소도시의 손님은 유한하다 (하루 상권 = 오늘 올 수 있는 손님 수) ═══════
-const POOL_STUDENTS = { semester:38, sat:16, sun:9, exam:24, examEnd:55, vacation:10, back:50 };
+const POOL_STUDENTS = { semester:52, sat:24, sun:14, exam:34, examEnd:64, vacation:16, back:60 };
 function rollPool() {
   const cal = calInfo(S.day), w = wxNow();
   let students = POOL_STUDENTS[cal.school] || 38;
-  let locals = 14;                                    // 주민·어르신 — 지방의 기반 수요
+  let locals = 18;                                    // 주민·어르신 — 지방의 기반 수요
   students = Math.round(students / w.gap / S.evtGap); // 궂은 날·악재엔 유동인구부터 준다
   if (w.id === 'rain') locals = 12; else if (w.id === 'heat') locals = 11;
   students += Math.floor(S.rep / 25);                 // 평판 = 입소문 (최대 +4)
@@ -293,7 +294,7 @@ const EVENTS = [
 
 // ═══════════════ 상태 ═══════════════
 const S = {
-  day:1, phase:'dawn', phaseLeft:T.dawn, money:50000, cond:100, rep:30, dirt:0,
+  day:1, phase:'dawn', phaseLeft:T.dawn, money:1000000, cond:100, rep:30, dirt:0,   // 운전자금 100만 (대출 2,000만 중 수중에 남긴 몫)
   stock:{tteok:8,eomuk:5,gimbap:5}, prepped:{}, skill:{}, unlocked:{tteok:true},
   policy:'normal', style:'neat', flyers:0, banner:false, tasting:0, upIdx:0, ups:{},
   hand:null, queue:[], passerby:null, resting:false, sick:false,
@@ -506,7 +507,7 @@ function miniTap() {
     S.skill[id] = (S.skill[id]||0)+1;
     if ((S.prepped[id]||0) > 0) { S.prepped[id]--; q = Math.min(3, q+1); log('🔪 손질해둔 재료라 더 잘 나왔다! +⭐', 'y'); }
     if (age >= LIFE[id]-1 && q > 2) { q = 2; log('🥬 오늘까지인 재료다… 맛이 어제만 못하다 (품질 상한 ⭐⭐)', 'd'); }
-    if (S.broken) q = 1;   // 🔧 고장난 화구로는 뭘 해도 엉망
+    if (S.broken) q = Math.min(q, 2);   // 🔧 성한 화구 하나로 버티는 중 — 최고의 맛은 안 나온다
     S.hand = { id, q };
     log(`${menuById(id).emoji} ${menuById(id).name} 완성 ${'⭐'.repeat(q)} (숙련 ${S.skill[id]})`);
     $('mini').style.display = 'none'; mini = null; render();
@@ -797,10 +798,11 @@ function doNight() {
     log(`🧾📮 주간 고지서! 임대료 ${fmt(RENT)} + 공과금 ${fmt(UTIL)} + 대출이자 ${fmt(interest)} + 생활비 ${fmt(LIVING)} = ${fmt(bill)}`, 'y');
     if (vatAcc) log(`🧾 부가세 적립 +${fmt(vatAcc)} (간이과세 — 누적 ${fmt(S.vatDue)}, 7월 25일에 고지서가 온다. 쓰지 말고 모아두자)`, 'd');
     if (S.money >= bill) { S.money -= bill; L.spend += bill; }
-    else {
-      const short = bill - S.money;
-      L.spend += S.money; S.money = 0; S.debt += short;
-      log(`💸 잔고 부족! ${fmt(short)}이 빚으로 남았다… (빚이 있으면 매일 평판이 깎인다)`, 'b');
+    else {   // 내일 장사 밑천(5만)은 지키고, 부족분은 연체(빚)로 — 현실의 연체는 전액 압류가 아니다
+      const avail = Math.max(0, S.money - 50000), pay = Math.min(avail, bill);
+      const short = bill - pay;
+      S.money -= pay; L.spend += pay; S.debt += short;
+      log(`💸 잔고 부족! ${fmt(short)}이 연체(빚)로 남았다… (빚이 있으면 매일 평판이 깎인다)`, 'b');
     }
     S.weekRev = 0;
   }
@@ -810,15 +812,16 @@ function doNight() {
     news(`🧾💥 부가세 예정고지!! ${fmt(vat)} — 넉 달 치가 한 번에 왔다`);
     if (S.money >= vat) { S.money -= vat; L.spend += vat; log(`🧾 부가세 ${fmt(vat)} 납부 완료 — 모아둔 보람이 있다`, 'y'); }
     else {
-      const short = vat - S.money;
-      L.spend += S.money; S.money = 0; S.debt += short;
+      const avail = Math.max(0, S.money - 50000), pay = Math.min(avail, vat);
+      const short = vat - pay;
+      S.money -= pay; L.spend += pay; S.debt += short;
       log(`🧾💸 부가세 낼 돈이 없다!! ${fmt(short)}이 빚으로… (방학 직후의 세금 폭탄 — 이래서 모아두라 했건만)`, 'b');
     }
   }
-  // 빚 상환/압박
+  // 빚 상환/압박 — 단, 내일 장사 밑천(5만)은 남긴다. 빚에 눌려도 새벽 도매상은 가야 한다
   if (S.debt > 0) {
-    if (S.money > 0) {
-      const pay = Math.min(S.money, S.debt);
+    if (S.money > 50000) {
+      const pay = Math.min(S.money - 50000, S.debt);
       S.money -= pay; S.debt -= pay;
       log(`💳 빚 ${fmt(pay)} 상환${S.debt>0?` (남은 빚 ${fmt(S.debt)})`:' — 다 갚았다!'}`, S.debt>0?'d':'g');
     }
@@ -956,7 +959,7 @@ function nextDay() {
     $('ledgerBody').innerHTML = `<h2>🏁 시즌 종료 — ${SEASON_DAYS}일 완주!</h2>
 <b style="font-size:22px">최종 순자산 ${fmt(asset)}</b><br>
 (현금 ${fmt(S.money)} + 설비·투자 + 재고 − 빚)<br>
-<span class="tag">창업 대출 2,000만에서 시작한 첫 6개월 — 빚을 줄인 만큼이 실력입니다 (🤖 AI 사장: -1,043만)</span><br><br>
+<span class="tag">창업 대출 2,000만에서 시작한 첫 6개월 — 빚을 줄인 만큼이 실력입니다 (🤖 AI 모범 사장: -1,135만)</span><br><br>
 ⭐평판 ${Math.floor(S.rep)} · 💜단골 ${Object.keys(S.regulars).length}명 · 🧑알바 ${S.staffList.length}명<br>
 🚨 노동청 신고 ${S.reports}회 · 🏪 2호점 ${S.branch?'달성!':'미달성'} · 🏦 대출 ${S.loan>0?fmt(S.loan)+' 남음':'완제!'}<br>
 ${S.credit.out>0?`📒 못 받은 외상 ${fmt(S.credit.out)} (80%만 자산 인정) · `:''}${S.vatDue>0?`🧾 부가세 예정 -${fmt(S.vatDue)}`:''}<br><br>
@@ -1002,9 +1005,12 @@ const A = {
   style() { const i = STYLE_ORDER.indexOf(S.style); S.style = STYLE_ORDER[(i+1)%3]; log(`오늘의 스타일: ${STYLES[S.style].name}`); render(); },
   rest() { S.resting = !S.resting; log(S.resting?'🪑 의자에 앉아 쉰다… (회복 3배)':'다시 일어났다!'); render(); },
   repair() { if (!S.broken) return;
-    if (S.money < S.brokenCost) return log(`수리비 ${fmt(S.brokenCost)}이 없다… 고장난 화구로 버티는 중 (품질 ⭐)`, 'b');
-    S.money -= S.brokenCost; S.led.spend += S.brokenCost; S.broken = false;
-    log(`🔧 수리 기사 방문 — ${fmt(S.brokenCost)} 들었다. 화구가 되살아났다!`, 'g'); render(); },
+    const cash = Math.min(S.money, S.brokenCost), rest = S.brokenCost - cash;
+    S.money -= cash; S.led.spend += S.brokenCost; S.broken = false;
+    if (rest > 0) { S.debt += rest;
+      log(`🔧 수리 기사: "사장님, 나머진 다음에 주세요" — 현금 ${fmt(cash)} + 외상 ${fmt(rest)}. 빚이 늘었지만 화구는 살렸다`, 'y'); }
+    else log(`🔧 수리 기사 방문 — ${fmt(S.brokenCost)} 들었다. 화구가 되살아났다!`, 'g');
+    render(); },
   credit() { S.creditPolicy = !S.creditPolicy;
     log(S.creditPolicy ? '📒 외상을 받기로 했다 — 대부분 갚지만, 가끔 못 받는다. 대신 어르신 단골이 늘 것이다'
                        : '📒 외상 사절! — 떼일 걱정은 없지만, 어르신들이 서운해한다', 'y'); render(); },
@@ -1128,6 +1134,7 @@ function render() {
     <div class="grp">📜 기록</div>
     <button onclick="showBoard()">🏆 순위표</button>
     <button onclick="exportLedger()">📜 경영일지</button>
+    <button onclick="location.href='sim.html'">📊 현실성 리포트</button>
     <button onclick="showGuide()">❓ 가이드</button>`;
   // 👉 신규 사장 힌트 (첫 3일)
   const hintEl = $('hint');
@@ -1200,7 +1207,7 @@ async function refreshBoard() {
 function renderRankbar() {
   const el = document.getElementById('rankbar');
   if (!el) return;
-  const rows = [...(boardCache || []), { nickname: '🤖 AI 사장', asset: -10430000 }]
+  const rows = [...(boardCache || []), { nickname: '🤖 AI 사장', asset: -11350000 }]
     .sort((a, b) => b.asset - a.asset);
   const my = assetValue();
   let rank = rows.findIndex(r => my >= r.asset);
@@ -1223,7 +1230,7 @@ window.showBoard = async () => {
     });
     if (!r.ok) { log('🏆 순위표를 불러올 수 없어요 (서버 준비 중 — ' + r.status + ')', 'b'); return; }
     const rows = await r.json();
-    const aiLine = { nickname: '🤖 AI 사장', asset: -10430000, day: 180, branch: false };
+    const aiLine = { nickname: '🤖 AI 사장', asset: -11350000, day: 180, branch: false };
     const all = [...rows, aiLine].sort((a, b) => b.asset - a.asset);
     document.getElementById('ledgerBody').innerHTML = '<h2>🏆 시즌 1 순위표</h2>' +
       (all.map((r2, i) => `${i+1}위 <b>${r2.nickname}</b> — ${fmt(r2.asset)} <span class="tag">(${r2.day}일${r2.branch?' · 🏪2호점':''})</span>`).join('<br>') || '아직 기록 없음') +
@@ -1309,7 +1316,7 @@ setInterval(() => {
 }, 250);
 
 log('🍢 K-분식집에 오신 것을 환영합니다! (방과후 스튜디오 — 웹 로그 프로토타입)', 'y');
-log(`🏦 창업 대출 ${fmt(LOAN_START)}과 함께 시작합니다 — 보증금·설비·권리금이 이 돈이었죠. 매주 이자가 나갑니다`, 'b');
+log(`🏦 창업 대출 ${fmt(LOAN_START)}과 함께 시작합니다 — 보증금·설비·권리금을 치르고 수중엔 운전자금 ${fmt(1000000)}이 남았습니다. 매주 이자가 나갑니다`, 'b');
 log('📅 3월 2일 개학날 개업 — 학교 앞 장사는 학사일정이 반입니다. 여름방학(7/20~)을 조심하세요', 'd');
 log('새벽입니다. 재료를 준비하고 🔔 종을 쳐서 문을 여세요.', 'd');
 setPhase(S.phase === 'dawn' ? 'dawn' : 'dawn');
