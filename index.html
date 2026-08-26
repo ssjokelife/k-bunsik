@@ -87,6 +87,21 @@ body.ph-rush #scene { box-shadow: inset 0 -4px 12px rgba(0,0,0,.3), 0 0 22px rgb
 @keyframes rushglow { 50% { box-shadow: inset 0 -4px 12px rgba(0,0,0,.3), 0 0 34px rgba(240,140,60,.85); } }
 /* 판정 텍스트 팝 */
 #mini .fb.pop { animation:cpop .5s ease-out; }
+/* 🏠 홈 화면 (타이틀) */
+#home { position:fixed; inset:0; z-index:18; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:9px; text-align:center; padding:20px;
+  background:linear-gradient(#1c1936 0%, #3a3560 42%, #c98a6a 58%, #6b5b45 58.3%, #493d30 100%); }
+#home:before { content:''; position:absolute; top:0; left:0; right:0; height:22px;
+  background:repeating-linear-gradient(90deg, #d95f3b 0 26px, #f4ead6 26px 52px); border-bottom:3px solid rgba(0,0,0,.3); }
+#home .logo { font-size:54px; line-height:1; margin-bottom:2px; filter:drop-shadow(0 4px 8px rgba(0,0,0,.5)); animation:logofloat 2.6s ease-in-out infinite; }
+@keyframes logofloat { 50% { transform:translateY(-6px); } }
+#home .title { font-size:34px; color:#ff9a6a; letter-spacing:2px; animation:neon 2.6s ease-in-out infinite; }
+#home .slogan { color:rgba(255,255,255,.85); font-size:14px; margin-bottom:14px; text-shadow:0 1px 3px rgba(0,0,0,.5); }
+#home button.menu { width:min(320px, 82vw); font-size:17px; padding:13px; }
+#home button.menu span { display:block; font-size:12px; opacity:.85; font-weight:normal; }
+#home .links { margin-top:14px; }
+#home .links a { color:#cdd8ee; font-size:13px; margin:0 7px; text-shadow:0 1px 2px rgba(0,0,0,.5); }
+#home .ver { color:rgba(255,255,255,.4); font-size:11px; margin-top:8px; }
 @keyframes shake { 0%,100% { transform:translateX(0); } 25% { transform:translateX(-5px); } 75% { transform:translateX(5px); } }
 body.shaking { animation:shake .3s 2; }
 .grid { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; }
@@ -141,7 +156,9 @@ button.on { border-color:var(--gold); color:var(--gold); }
 <div id="mini"><h2 id="miniTitle"></h2><div class="track"><div class="zone" id="zone"></div><div class="cur" id="cur"></div></div><div class="fb" id="miniFb"></div><button class="tap" id="tapBtn">탭!</button></div>
 <div id="ledger"><div class="paper" id="ledgerBody"></div></div>
 <div class="news" id="news"></div>
-<div id="pauseOv"><h2>⏸ 일시정지</h2><button onclick="togglePause()">▶ 계속하기</button></div>
+<div id="pauseOv"><h2>⏸ 일시정지</h2><button onclick="togglePause()">▶ 계속하기</button>
+<button onclick="goHome()" style="background:#2f2f3a;margin-top:8px">🏠 홈으로</button></div>
+<div id="home"></div>
 <div id="guide"><div class="paper">
 <h2>🍢 K-분식집 가이드</h2>
 <b>당신은 학교 앞 분식집 사장님.</b> 창업 대출 <b>2,000만원</b>을 안고 시작합니다.
@@ -1792,6 +1809,55 @@ if (S.tut && S.tut < 3) setPhase('open');   // 🎓 1·2단계는 바로 영업 
 if (S.tut) log(`🎓 ${TUT[S.tut].title} — ${TUT[S.tut].tip}`, 'y');
 render();
 if (!S.tut) pingLive();
+
+// ═══════════════ 🏠 홈 화면 — 모바일 게임의 문 ═══════════════
+function renderHome() {
+  const el = document.getElementById('home');
+  const tutDone = !!localStorage.getItem('bunsik_tut_done');
+  const cont = LOADED && !S.tut;
+  el.innerHTML = `
+    <div class="logo">🍢</div>
+    <div class="title">K-분식집</div>
+    <div class="slogan">지방 소도시 학교 앞, 당신의 6개월 — 방과후 스튜디오</div>
+    ${cont
+      ? `<button class="menu hot" onclick="startGame()">▶ 이어하기<span>🏪 ${S.owner || '무명 분식'} · D${S.day}/180 · 💰 ${fmt(S.money)}</span></button>
+         <button class="menu" onclick="newSeason()">🌱 새 시즌 시작</button>`
+      : S.tut
+      ? `<button class="menu hot" onclick="startGame()">🎮 시작하기<span>🎓 튜토리얼부터 차근차근 (5분)</span></button>`
+      : `<button class="menu hot" onclick="startGame()">🏪 개업하기<span>새 시즌 180일이 시작됩니다</span></button>`}
+    <button class="menu" onclick="showBoard()">🏆 랭킹</button>
+    <button class="menu" onclick="location.href='live.html'">🟢 라이브 현황판</button>
+    ${tutDone ? `<button class="menu" onclick="replayTut()" style="opacity:.85">🎓 튜토리얼 다시 하기</button>` : ''}
+    <div class="links">
+      <a href="mods.html">🧩 모드</a><a href="sim.html">📊 리포트</a><a href="model.html">📐 명세서</a>
+    </div>
+    <div class="ver">v2.6 · 통계로 교정된 현실 시뮬레이터 · 파산율 20%</div>`;
+  el.style.display = 'flex';
+  window.PAUSE = true;
+}
+window.startGame = () => {
+  document.getElementById('home').style.display = 'none';
+  window.PAUSE = false;
+  last = Date.now();   // 홈에 머문 시간은 게임 시간에서 제외
+  render();
+};
+window.goHome = () => {
+  document.getElementById('pauseOv').style.display = 'none';
+  renderHome();
+};
+window.newSeason = () => {
+  if (!confirm(`${S.owner || '지금'} 가게(D${S.day})를 접고 새 시즌을 시작할까요?`)) return;
+  localStorage.removeItem('bunsik_v3');
+  location.reload();
+};
+window.replayTut = () => {
+  if (LOADED && !confirm('진행 중인 가게는 유지됩니다. 튜토리얼만 다시 해볼까요?')) return;
+  localStorage.removeItem('bunsik_tut_done');
+  localStorage.removeItem('bunsik_v3');
+  location.reload();
+};
+if (!location.search.includes('nohome')) renderHome();
+else window.PAUSE = false;
 if (!localStorage.getItem('bunsik_guide_v1')) {
   localStorage.setItem('bunsik_guide_v1', '1');
   showGuide();
