@@ -334,12 +334,13 @@ const S = {
   weekRev:0, debt:0, regulars:{}, reports:0, suspension:0,
   loan:LOAN_START,
   wx:null, wxNext:null, vatDue:0, credit:{out:0,book:[]}, creditPolicy:true,
-  pot:{n:0}, potTimer:0,
+  pot:{n:0}, potTimer:0, tut:0, tutServed:0, tutDays:0, owner:'',
   delivery:false, flag:false, rating:4.3, csPolicy:'sorry', relations:true,
   booking:null, bookingOffer:null, savingsOn:false, savings:0,
   refiOffered:false, refiDone:false, exitArm:false,
 };
-try { const sv = JSON.parse(localStorage.getItem('bunsik_v3')||'null'); if (sv && sv.day) Object.assign(S, sv); } catch(e) {}
+let LOADED = false;
+try { const sv = JSON.parse(localStorage.getItem('bunsik_v3')||'null'); if (sv && sv.day) { Object.assign(S, sv); LOADED = true; } } catch(e) {}
 S.queue = []; S.passerby = null; S.hand = null;   // 휘발 상태는 리셋
 if (!S.credit) S.credit = { out:0, book:[] };     // 구버전 저장 마이그레이션 (현실 패치 v2)
 if (S.creditPolicy == null) S.creditPolicy = true;
@@ -357,6 +358,23 @@ if (S.delivery == null) { S.delivery = false; S.flag = false; S.rating = 4.3; S.
   S.relations = true; S.booking = null; S.bookingOffer = null; S.savingsOn = false; S.savings = 0;
   S.refiOffered = false; S.refiDone = false; }
 S.exitArm = false;
+if (S.owner == null) S.owner = '';
+// 🎓 튜토리얼 — 처음 온 사람은 5세도 할 수 있는 단계부터 (기존 저장·졸업자·?notut 제외)
+if (!LOADED && !localStorage.getItem('bunsik_tut_done') && !location.search.includes('notut')) { S.tut = 1; S.money = 0; }
+if (!S.owner) S.owner = localStorage.getItem('bunsik_owner') || '';
+if (S.tut == null) S.tut = 0;
+const TUT = {
+  1: { title: '1단계 · 주문과 조리', goal: '손님 5명에게 서빙하기', need: 5,
+       tip: '손님 말풍선의 음식 → [🍲 조리] 버튼 → 움직이는 커서를 초록 구간에서 탭! → 완성되면 손님을 탭! (재료 걱정 없어요)' },
+  2: { title: '2단계 · 장보기', goal: '재료를 발주해서 8명 서빙하기', need: 8,
+       tip: '이제 재료가 떨어져요 — 📦 버튼으로 사두세요. 판 만큼 돈이 들어옵니다' },
+  3: { title: '3단계 · 하루의 리듬', goal: '하루를 마치고 흑자 정산 받기', need: 1,
+       tip: '🌅 새벽에 🔪 손질(품질+1) → 🔔 개점 → 🔥 하교 러시 → 🔔 마감. 손질해두면 러시가 편해요' },
+  4: { title: '4단계 · 손님의 마음', goal: '단골 1명 만들기', need: 1,
+       tip: '이제 손님이 기다리다 화나면 떠나요! ⭐⭐ 이상으로 빨리 서빙하면 단골이 됩니다' },
+  5: { title: '5단계 · 돈의 무게', goal: '7일을 버티고 첫 주간 고지서 내기', need: 1,
+       tip: '임대료·공과금·생활비… 번 돈이 다 내 돈이 아니에요. 그래도 남기면 — 진짜 사장님!' },
+};
 if (S.activeEvt) {   // 저장된 이벤트는 함수(on/off)를 잃는다 — id로 재연결, 없어진 이벤트(구 '비')는 해제
   const evDef = EVENTS.find(e => e.id === (S.activeEvt.def && S.activeEvt.def.id));
   if (evDef) S.activeEvt.def = evDef;
@@ -439,6 +457,7 @@ function ingCost(id) { return ING[id].cost * (S.evtCost[id]||1); }
 
 // ═══════════════ 손님 ═══════════════
 function spawnGap() {
+  if (S.tut) return S.tut === 1 ? 7 : 5;   // 🎓 연습은 천천히
   const cal = calInfo(S.day);
   let g = 4.5 * (S.ups.sign?.8:1) * POLICY[S.policy].gap * (1.15 - S.rep*.003) * S.evtGap
         * cal.mul * wxNow().gap;   // 📅 학사일정 × 🌦 날씨가 오늘의 손님을 정한다
@@ -475,6 +494,17 @@ function rollItems() {
   return items;
 }
 function addCustomer(fromFlyer, g, nm) {
+  if (S.tut) {   // 🎓 연습 손님 — 단순하고 착하다
+    if (S.queue.length >= 3) return false;
+    const gender = Math.random() < .5 ? 'M' : 'F';
+    const name = gender === 'M' ? rnd(NAMES_M) : rnd(NAMES_F);
+    const items = [{ id: 'tteok', done: false, q: 0 }];
+    const isReg = !!S.regulars[name];
+    const pat = S.tut >= 4 ? patience() + (isReg ? 10 : 0) : 9999;
+    S.queue.push({ name, gender, items, pat, max: pat, reg: isReg });
+    log(`${isReg ? '💜 단골 ' : ''}${gender==='M'?'👦':'👧'} ${name} 학생 도착 — "🍲 떡볶이 주세요!"`, isReg ? 'g' : 'd');
+    return true;
+  }
   // 🚶 수요 풀: 오늘 올 수 있는 손님은 유한하다 (전단지·현수막·시식 손님은 마케팅이 만든 추가 수요)
   const organic = !fromFlyer && !nm;
   if (organic) {
@@ -529,6 +559,7 @@ function startCook(id) {
   if (!isOpen()) return log('아직 개점 전! 🔔 종을 치세요', 'b');
   if (S.sick) return log('🤒 몸살! 쉬어야 해요 (컨디션 25까지 회복 필요)', 'b');
   if (S.hand) return log('이미 접시를 들고 있어요 — 먼저 서빙!', 'b');
+  if (S.tut === 1 && (S.stock[id]||0) <= 0) addStock(id, 5);   // 🎓 1단계는 마법의 냉장고
   if ((S.stock[id]||0) <= 0) return log('재료 소진! 📦 발주하세요', 'b');
   const m = menuById(id);
   mini = { id, round:0, total:m.rounds, scores:[], t:0, dir:1 };
@@ -643,6 +674,12 @@ function checkout(i, staff) {
   if (++S.servesSinceStain >= 3 && S.dirt < 6) { S.servesSinceStain = 0; S.dirt++; log('🧹 바닥에 얼룩이 생겼다… (' + S.dirt + '개)', 'd'); }
   if (typeof modFire === 'function') modFire('checkout', { customer: c, price, q });   // 🧩 모드 훅
   render();
+  if (S.tut) {   // 🎓 목표 체크
+    S.tutServed = (S.tutServed || 0) + 1;
+    if (S.tut === 1 && S.tutServed >= TUT[1].need) tutPass(2, `벌써 ${TUT[1].need}명! 조리와 서빙, 완벽해요`);
+    else if (S.tut === 2 && S.tutServed >= TUT[2].need) tutPass(3, '재료 관리까지 — 장보기의 감을 잡았어요');
+    else if (S.tut === 4 && Object.keys(S.regulars).length >= 1) tutPass(5, '💜 첫 단골이 생겼어요! 손님의 마음을 얻었습니다');
+  }
 }
 
 // ═══════════════ 컨디션/청소/휴식 ═══════════════
@@ -812,6 +849,68 @@ function endEvent() {
   news(S.activeEvt.def.end); S.activeEvt = null; S.evtCd = 100; render();
 }
 
+// ═══════════════ 🎓 튜토리얼 엔진 ═══════════════
+function tutPass(next, msg) {
+  $('ledgerBody').innerHTML = next <= 5
+    ? `<h2>🎉 ${TUT[S.tut].title} 통과!</h2>${msg || ''}<br><br><b>다음: ${TUT[next].title}</b><br>${TUT[next].tip}<br><br><button onclick="tutBegin(${next})">계속하기 →</button>`
+    : `<h2>🎓 축하합니다!!</h2><b style="font-size:20px">이제 분식집을 오픈할 수 있습니다!</b><br><br>
+지금부터는 진짜입니다 — 창업 대출 2,000만원, 학사일정과 장마, 설비 고장과 진상 손님,
+그리고 당신만의 동네.<br><br>
+<span class="tag">플레이하다 "이건 현실과 다른데?" 싶으면 💡 규칙 제안 — 당신 버전에만 반영해드립니다</span><br><br>
+<button onclick="tutGraduate()">🏪 개업하러 가기!</button>`;
+  $('ledger').style.display = 'flex';
+  save();
+}
+window.tutBegin = (n) => {
+  $('ledger').style.display = 'none';
+  S.tut = n; S.tutServed = 0; S.tutDays = 0;
+  if (n === 2) { S.stockLots = {}; syncStock(); addStock('tteok', 5); S.money = 30000; }
+  if (n === 3) { S.money = 100000; S.day++; S.led = {rev:0,spend:0,served:0,missed:0,fTry:0,fHit:0,bHit:0,tHit:0}; setPhase('dawn'); }
+  if (n === 4) { S.regulars = {}; S.rep = 30; }   // 단골은 이번 단계에서 직접 벌어야 한다
+  if (n === 5) { S.money = 150000; }
+  log(`🎓 ${TUT[n].title} — 목표: ${TUT[n].goal}`, 'y');
+  render(); save();
+};
+window.tutGraduate = () => {
+  const nm = (prompt('당신의 분식집 이름을 지어주세요! (라이브 현황판에 표시됩니다)', '개나리 분식') || '무명 분식').trim().slice(0, 12);
+  localStorage.setItem('bunsik_tut_done', '1');
+  localStorage.setItem('bunsik_owner', nm || '무명 분식');
+  localStorage.removeItem('bunsik_v3');
+  location.reload();
+};
+function tutNight() {
+  setPhase('night');
+  S.queue = []; S.hand = null;
+  const L = S.led, profit = L.rev - L.spend;
+  S.tutDays = (S.tutDays || 0) + 1;
+  if (S.tut === 3 && profit > 0) { tutPass(4, `첫 흑자 정산! 순이익 <b>+${fmt(profit)}</b> — 하루의 리듬을 익혔어요`); return; }
+  if (S.tut === 5 && S.tutDays >= 7) {
+    const bill = RENT + UTIL + LIVING;
+    if (S.money >= bill) { S.money -= bill; tutPass(6, `🧾 첫 고지서 ${fmt(bill)}을 내고도 <b>${fmt(S.money)}</b>이 남았다!`); return; }
+    S.tutDays = 5;   // 이틀 더 기회
+    $('ledgerBody').innerHTML = `<h2>🧾 고지서의 날…</h2>임대료+공과금+생활비 = <b>${fmt(bill)}</b><br>잔고 ${fmt(S.money)} — <b>${fmt(bill - S.money)} 부족!</b><br>이틀 더 벌어봅시다.<br><br><button onclick="tutMorning()">🌅 다음 날</button>`;
+    $('ledger').style.display = 'flex'; save(); return;
+  }
+  $('ledgerBody').innerHTML = `<h2>🧾 연습 ${S.tutDays}일차 정산</h2>
+매출 ${fmt(L.rev)} · 지출 -${fmt(L.spend)}<br>순이익 <b style="color:${profit>=0?'#3a7a3a':'#b04040'}">${profit>=0?'+':''}${fmt(profit)}</b><br><br>
+${S.tut === 3 ? '💡 아직 흑자가 아니에요 — 내일은 새벽에 손질해두고 러시 때 몰아치세요!' : ''}
+${S.tut === 5 ? `📮 주간 고지서까지 <b>${7 - S.tutDays}일</b> — 모아두세요!` : ''}<br><br>
+<button onclick="tutMorning()">🌅 다음 날 아침</button>`;
+  $('ledger').style.display = 'flex'; save();
+}
+window.tutMorning = () => {
+  $('ledger').style.display = 'none';
+  S.led = {rev:0,spend:0,served:0,missed:0,fTry:0,fHit:0,bHit:0,tHit:0};
+  S.cond = 100; S.day++; setPhase('dawn'); save();
+};
+function tutActionsHtml() {
+  return `<div class="grp">🎓 연습 중 — ${TUT[S.tut].goal}</div>
+    ${S.tut >= 3 ? `<button class="hot" onclick="A.bell()">🔔 ${S.phase==='dawn'?'개점':'마감'} 종</button>` : ''}
+    ${S.tut >= 3 && S.phase === 'dawn' ? MENUS.filter(m=>S.unlocked[m.id]).map(m=>`<button onclick="A.prep('${m.id}')">🔪 ${m.name} 손질</button>`).join('') : ''}
+    <button onclick="showGuide()">❓ 가이드</button>
+    <button onclick="tutGraduate()" style="opacity:.6">⏭ 연습 건너뛰기</button>`;
+}
+
 // ═══════════════ 하루 사이클 ═══════════════
 function isOpen() { return ['open','rush','evening'].includes(S.phase); }
 function setPhase(p) {
@@ -826,6 +925,14 @@ function setPhase(p) {
     else if (sc === 'sat' || sc === 'sun') news('🛍 주말 오후 — 드문드문 나들이 손님뿐');
     else if (sc === 'exam') news('✏️ 시험기간 — 학생들이 바로 학원으로 가버린다');
     else news('🔔 하교 시간! 손님 러시!');
+  }
+  if (p==='dawn' && S.tut) {   // 🎓 연습 중엔 세상이 단순하다 — 날씨도 고지서도 없다
+    S.wx = { day: S.day, id: 'sunny' };
+    S.pool = { students: 99, locals: 0 };
+    log(`🎓 ${TUT[S.tut].title} · 목표: ${TUT[S.tut].goal}`, 'y');
+    if (S.tut >= 3) log('🌅 새벽입니다 — 🔪 손질해두고 🔔 종을 치세요', 'd');
+    render();
+    return;
   }
   if (p==='dawn') {
     // 📅 오늘의 달력·날씨 — 학교 앞 사장의 아침은 달력 확인부터
@@ -927,6 +1034,7 @@ function ringBell() {
   else if (isOpen()) { log('🔔 오늘 영업 끝! 마감합니다', 'y'); doNight(); }
 }
 function doNight() {
+  if (S.tut) { tutNight(); return; }   // 🎓 연습 정산은 단순하게
   if (typeof modFire === 'function') modFire('nightStart');   // 🧩 모드 훅
   setPhase('night');
   S.queue.forEach(c => log(`${c.name} 학생을 돌려보냈다…`, 'd'));
@@ -1145,6 +1253,7 @@ function nextDay() {
   S.day++; S.cond = Math.min(100, S.cond+45); checkCond();
   S.led = {rev:0,spend:0,served:0,missed:0,fTry:0,fHit:0,bHit:0,tHit:0};
   S.combo = 0; setPhase('dawn'); save();
+  if (window.pingLive) pingLive();   // 🟢 현황판 갱신
 }
 
 // ═══════════════ 액션 ═══════════════
@@ -1281,6 +1390,11 @@ const A = {
 // ═══════════════ 렌더 ═══════════════
 function render() {
   const pn = { dawn:'🌅 새벽', open:'☀️ 영업', rush:'🔔 러시!', evening:'🌆 저녁', night:'🌙 마감' };
+  if (S.tut) {
+    $('topbar').innerHTML = `<b>🎓 ${TUT[S.tut].title}</b> <span class="tag">${TUT[S.tut].goal}${S.tut<=2?` (${S.tutServed||0}/${TUT[S.tut].need})`:''}</span>
+      <span style="margin-left:auto"><b>💰 ${fmt(S.money)}</b></span>`;
+    $('statbar').innerHTML = `♥<span class="meter"><i style="width:${S.cond}%;background:#7fd18a"></i></span> ⭐${Math.floor(S.rep)} 💜${Object.keys(S.regulars).length}`;
+  } else {
   const cal = calInfo(S.day), w = wxNow();
   $('topbar').innerHTML = `<b>${cal.m}/${cal.d}(${cal.wdName})</b> ${w.icon} ${pn[S.phase]} <span class="tag">D${S.day}/${SEASON_DAYS} · ${Math.ceil(S.phaseLeft)}초</span>
     ${cal.badge?`<span style="color:var(--gold)">${cal.badge}</span>`:''}
@@ -1289,6 +1403,7 @@ function render() {
   $('statbar').innerHTML = `♥<span class="meter"><i style="width:${S.cond}%;background:${S.cond<30?'#e88a7a':'#7fd18a'}"></i></span>
     ${S.loan>0?`<span style="color:#e8a15a">🏦${Math.round(S.loan/10000)}만</span>`:'🎉완제'} ⭐${Math.floor(S.rep)} ${S.delivery?`🛵${S.rating.toFixed(1)}`:''} 💜${Object.keys(S.regulars).length} ${S.savings>0?`🐷${Math.round(S.savings/10000)}만`:''} ${S.credit.out>0?`📒${Math.round(S.credit.out/1000)}천`:''} ${S.vatDue>0?`🧾${Math.round(S.vatDue/10000)}만`:''} 🧹${S.dirt>0?`얼룩${S.dirt}`:'깨끗'} 📣${S.flyers}장 ${S.debt>0?`<span style="color:var(--bad)">💳빚 ${fmt(S.debt)}</span>`:''} ${S.sick?'🤒몸살!':''} ${S.resting?'🪑쉬는 중':''}
     <span style="margin-left:auto" class="tag">${POLICY[S.policy].name}·${STYLES[S.style].name}</span>`;
+  }
   $('queue').innerHTML = S.queue.map((c,i) => {
     const undone = c.items.filter(x => !x.done);
     const match = (S.hand && undone.some(x => x.id === S.hand.id)) || (S.pot.n > 0 && undone.some(x => x.id === 'eomuk'));
@@ -1313,7 +1428,7 @@ function render() {
     : (d.id==='remodel') ? (!S.remodel && !S.construction) : !S.branch;
   const nextDream = DREAMS.find(dreamAvail);
   const up = UPGRADES[S.upIdx];
-  $('actions').innerHTML = `
+  $('actions').innerHTML = S.tut ? tutActionsHtml() : `
     <div class="grp">⏰ 하루</div>
     <button class="hot" onclick="A.bell()">🔔 ${S.phase==='dawn'?'개점':'마감'} 종</button>
     <button onclick="togglePause()">⏸ 일시정지</button>
@@ -1356,10 +1471,14 @@ function render() {
     <button onclick="location.href='model.html'">📐 모델 명세서</button>
     <button class="hot" onclick="suggestRule()">💡 규칙 제안</button>
     <button onclick="location.href='mods.html'">🧩 모드 ${window.ACTIVE_MODS&&ACTIVE_MODS.length?`(${ACTIVE_MODS.length})`:''}</button>
+    <button onclick="location.href='live.html'">🟢 라이브 현황판</button>
     <button onclick="showGuide()">❓ 가이드</button>`;
   // 👉 신규 사장 힌트 (첫 3일)
   const hintEl = $('hint');
-  if (S.day <= 3) {
+  if (S.tut) {
+    hintEl.textContent = '💡 ' + TUT[S.tut].tip;
+    hintEl.style.display = 'block';
+  } else if (S.day <= 3) {
     const HINTS = {
       dawn: '👉 지금 할 일: 📦 재료 사기 → 🔪 손질 → 준비되면 🔔 종!',
       open: '👉 손님 주문 확인 → [🍳 조리] 탭 타이밍 게임 → 완성되면 초록 테두리 손님 탭!',
@@ -1370,7 +1489,7 @@ function render() {
     hintEl.textContent = HINTS[S.phase] || '';
     hintEl.style.display = 'block';
   } else hintEl.style.display = 'none';
-  if (nextDream) {
+  if (nextDream && !S.tut) {
     $('topbar').innerHTML += `<span class="tag" style="width:100%">🎯 다음 꿈: ${nextDream.name} — ${Math.min(100,Math.floor(S.money/nextDream.cost*100))}% (${fmt(S.money)} / ${fmt(nextDream.cost)})</span>`;
   }
   if (S.research) $('topbar').innerHTML += `<span class="tag">📖 ${menuById(S.research.menu).name} 연구 ${S.research.daysLeft}일 남음</span>`;
@@ -1520,7 +1639,8 @@ function gameTick(dt) {
   // 페이즈 진행
   S.phaseLeft -= dt;
   if (S.phaseLeft <= 0) {
-    if (S.phase==='dawn') {
+    if (S.tut && S.tut < 3) { S.phaseLeft = 999; if (S.phase === 'dawn') setPhase('open'); }
+    else if (S.phase==='dawn') {
       if (S.construction || S.suspension > 0) { doNight(); }
       else { log('🔔 개점 시간! (자동)', 'y'); setPhase('open'); }
     }
@@ -1541,7 +1661,8 @@ function gameTick(dt) {
     if (custTimer <= 0) { custTimer = spawnGap(); addCustomer(); render(); }
     let changed = false;
     for (let i=S.queue.length-1; i>=0; i--) {
-      const c = S.queue[i]; c.pat -= dt;
+      const c = S.queue[i];
+      if (!S.tut || S.tut >= 4) c.pat -= dt;   // 🎓 3단계까지는 손님이 무한히 기다려준다
       if (c.pat <= 0) {
         SFX.bad(); fx('💢 ' + c.name + ' 놓침!', '#ff8a7a');
         if (c.delivery) { S.rating = Math.max(1, S.rating - .08);
@@ -1555,7 +1676,7 @@ function gameTick(dt) {
     }
     if (changed) render();
   }
-  passerbyTick(dt); deliveryTick(dt); eventTick(dt); staffTick(dt);
+  if (!S.tut) { passerbyTick(dt); deliveryTick(dt); eventTick(dt); staffTick(dt); }
   if (S.evtCd>0) S.evtCd -= dt;
   // 가벼운 UI 갱신 (1초마다)
   const now = Date.now();
@@ -1578,12 +1699,29 @@ setInterval(() => {
   gameTick(dt * window.SPEED);
 }, 250);
 
+// 🟢 라이브 현황판 핑 — 누가, 어떤 룰로, 며칠째, 얼마인지 (본편만, 하루 1회)
+const UID = (() => { let u = localStorage.getItem('bunsik_uid');
+  if (!u) { u = (crypto.randomUUID ? crypto.randomUUID() : 'u' + Date.now() + Math.floor(Math.random()*1e6)); localStorage.setItem('bunsik_uid', u); }
+  return u; })();
+window.pingLive = async () => {
+  if (S.tut) return;
+  try {
+    await fetch(SB_URL + '/rest/v1/live', { method: 'POST',
+      headers: { ...SB_HDR, 'Content-Type': 'application/json', 'Content-Profile': 'bunsik', Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({ uid: UID, name: (S.owner || '무명 분식').slice(0, 12), day: S.day,
+        asset: assetValue(), mods: ACTIVE_MODS.join(','), updated_at: new Date().toISOString() }) });
+  } catch (e) {}
+};
+
 log('🍢 K-분식집에 오신 것을 환영합니다! (방과후 스튜디오 — 웹 로그 프로토타입)', 'y');
 log(`🏦 창업 대출 ${fmt(LOAN_START)}과 함께 시작합니다 — 보증금·설비·권리금을 치르고 수중엔 운전자금 ${fmt(1000000)}이 남았습니다. 매주 이자가 나갑니다`, 'b');
 log('📅 3월 2일 개학날 개업 — 학교 앞 장사는 학사일정이 반입니다. 여름방학(7/20~)을 조심하세요', 'd');
 log('새벽입니다. 재료를 준비하고 🔔 종을 쳐서 문을 여세요.', 'd');
 setPhase(S.phase === 'dawn' ? 'dawn' : 'dawn');
+if (S.tut && S.tut < 3) setPhase('open');   // 🎓 1·2단계는 바로 영업 — 5세도 즉시 시작
+if (S.tut) log(`🎓 ${TUT[S.tut].title} — ${TUT[S.tut].tip}`, 'y');
 render();
+if (!S.tut) pingLive();
 if (!localStorage.getItem('bunsik_guide_v1')) {
   localStorage.setItem('bunsik_guide_v1', '1');
   showGuide();

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🟢 K-분식집 라이브 현황판</title>
+<style>
+body { margin:0; background:#14161c; color:#dde; font-family:'Malgun Gothic',sans-serif; line-height:1.55; }
+.wrap { max-width:720px; margin:0 auto; padding:18px 14px 60px; }
+h1 { font-size:21px; color:#ffd08a; margin:10px 0 2px; }
+.sub { color:#99a; font-size:13px; }
+.card { background:#1b1e27; border-radius:12px; padding:12px 14px; margin:10px 0; }
+.shop { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; border-bottom:1px solid #262a35; padding:9px 2px; }
+.shop .nm { font-weight:bold; font-size:15px; color:#ffd08a; }
+.shop .day { color:#8fb8e8; font-size:13px; }
+.shop .asset { font-size:14px; }
+.shop .asset.minus { color:#e8a15a; }
+.shop .asset.plus { color:#9de89a; }
+.shop .mods { font-size:12px; color:#c9a; }
+.shop .ago { margin-left:auto; color:#667; font-size:11.5px; }
+.note { font-size:12.5px; color:#99a; }
+a { color:#8fb8e8; }
+.play { display:inline-block; background:#2a3040; padding:8px 16px; border-radius:8px; text-decoration:none; margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>🟢 라이브 현황판 — 지금 굴러가는 분식집들</h1>
+<div class="sub"><a href="index.html">🍢 게임</a> · <a href="mods.html">🧩 모드</a> · <a href="sim.html">📊 리포트</a> · <a href="model.html">📐 명세서</a></div>
+
+<div class="card note">
+튜토리얼을 졸업하고 개업한 가게들이 여기에 보입니다 — <b>누가, 어떤 룰(모드)로, 며칠째, 얼마</b>인지.
+순자산은 창업 대출 2,000만원을 안고 시작하므로 마이너스가 정상입니다. <b>빚을 줄여가는 만큼이 실력.</b>
+🤖 AI 모범 사장의 6개월 성적은 -1,335만원이에요.
+</div>
+
+<div class="card" id="board">불러오는 중…</div>
+
+<div style="text-align:center; margin-top:18px">
+<a class="play" href="index.html">🏪 나도 개업하기 (5세도 가능한 연습부터)</a>
+</div>
+
+<script>
+const SB_URL = 'https://iwslrkoonyxyausvclxv.supabase.co';
+const SB_KEY = 'sb_publishable__BEJsC-KMEmdtyr7E_uzvg_-1Rl1KHq';
+const fmt = n => (n < 0 ? '-' : '+') + Math.abs(n).toLocaleString('ko-KR') + '원';
+function ago(t) {
+  const s = (Date.now() - new Date(t).getTime()) / 1000;
+  if (s < 90) return '방금';
+  if (s < 3600) return Math.floor(s/60) + '분 전';
+  if (s < 86400) return Math.floor(s/3600) + '시간 전';
+  return Math.floor(s/86400) + '일 전';
+}
+async function load() {
+  const el = document.getElementById('board');
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/live?select=name,day,asset,mods,updated_at&order=updated_at.desc&limit=60', {
+      headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Accept-Profile': 'bunsik' },
+    });
+    if (!r.ok) { el.innerHTML = '현황판 서버 준비 중입니다 (' + r.status + ') — 대표가 live 테이블 SQL을 실행하면 켜져요'; return; }
+    const rows = await r.json();
+    if (!rows.length) { el.innerHTML = '아직 개업한 가게가 없어요 — 첫 번째 사장님이 되어보세요!'; return; }
+    el.innerHTML = rows.map(x => `
+      <div class="shop">
+        <span class="nm">🏪 ${String(x.name||'무명 분식').slice(0,12)}</span>
+        <span class="day">D${x.day}/180</span>
+        <span class="asset ${x.asset < 0 ? 'minus' : 'plus'}">${fmt(x.asset)}</span>
+        <span class="mods">${x.mods ? '🧩 ' + x.mods : '기본 룰'}</span>
+        <span class="ago">${ago(x.updated_at)}</span>
+      </div>`).join('');
+  } catch (e) { el.innerHTML = '현황판을 불러올 수 없어요 — 오프라인?'; }
+}
+load();
+setInterval(load, 60000);
+</script>
+</div>
+</body>
+</html>
