@@ -254,6 +254,15 @@ function rollPool() {
   if (w.id === 'rain') locals = 12; else if (w.id === 'heat') locals = 11;
   students += Math.floor(S.rep / 25);                 // 평판 = 입소문 (최대 +4)
   locals += Math.floor(S.rep / 34);
+  // 💲 가격 저항 — 학생 주머니는 얇다. 프리미엄은 평판으로 벌어서 얻는 권리다
+  if (S.policy === 'premium') {
+    const acc = Math.min(.85, .62 + S.rep * .0022);   // 평판 100 = 거부감 완화 (0.62→0.84)
+    students = Math.round(students * acc);
+    locals = Math.round(locals * Math.min(.9, acc + .05));
+  } else if (S.policy === 'cheap') {
+    students = Math.round(students * 1.15);           // 착한가격 소문은 빠르다
+    locals = Math.round(locals * 1.08);
+  }
   if (cal.school === 'children') locals = Math.round(locals * 2.5);   // 🎏 나들이 가족들
   if (cal.school === 'holiday') locals = Math.round(locals * 1.6);
   if (S.relations) locals += 2;                       // 동네 관계를 챙기는 사장의 가게엔 이웃이 온다
@@ -621,7 +630,8 @@ function checkout(i, staff) {
   if (q===3) S.rep = Math.min(100, S.rep+2); else if (q===2) S.rep = Math.min(100, S.rep+1);
   // 💜 단골 등록: 좋은 경험(★2+)을 한 손님은 단골이 될 수 있다 (외상 거절당한 어르신은 예외)
   const canReg = !(c.elder && c.wantsCredit && !S.creditPolicy);
-  if (q >= 2 && !S.regulars[c.name] && canReg && Math.random() < (c.elder ? .5 : .35)) {
+  const regP = (c.elder ? .5 : .35) * (S.policy === 'premium' ? .6 : 1);   // 비싼 집엔 단골이 천천히 든다
+  if (q >= 2 && !S.regulars[c.name] && canReg && Math.random() < regP) {
     S.regulars[c.name] = { visits: 1 };
     log(`💜 ${c.name}${c.elder?'이(가)':' 학생이'} 단골이 됐다! (다음부터 참을성 있게 기다리고 잔돈도 잘 준다)`, 'y');
   } else if (S.regulars[c.name]) { S.regulars[c.name].visits++; }
