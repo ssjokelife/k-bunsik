@@ -4,11 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>🍢 K-분식집 — 영업일지</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
 <style>
 :root { --bg:#1a1a20; --card:#26262e; --ink:#e8e4da; --dim:#9a958a; --accent:#e8734f; --good:#7fd18a; --bad:#e88a7a; --gold:#ecc94b; }
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-body { margin:0 auto; background:var(--bg); color:var(--ink); font-family:'Malgun Gothic',sans-serif; max-width:560px; padding:8px 8px 40vh;
+body { margin:0 auto; background:var(--bg); color:var(--ink); font-family:'Jua','Malgun Gothic',sans-serif; max-width:560px; padding:8px 8px 40vh;
   transition: background 1.2s; }
+button, input { font-family:'Jua','Malgun Gothic',sans-serif; }
 body.ph-dawn { background:#232038; } body.ph-open { background:#1e2836; } body.ph-rush { background:#33231d; }
 body.ph-evening { background:#2c2030; } body.ph-night { background:#15151c; }
 @media (min-width: 980px) {
@@ -17,7 +20,11 @@ body.ph-evening { background:#2c2030; } body.ph-night { background:#15151c; }
   #log { grid-column: 2; grid-row: 2 / span 30; height: calc(100vh - 60px); position: sticky; top: 10px; }
   h1 { grid-column: 1 / span 2; }
 }
-h1 { font-size:18px; margin:6px 4px; color:var(--accent); }
+h1 { font-size:21px; margin:8px 4px; color:#ff9a6a; letter-spacing:1px;
+  text-shadow:0 0 10px rgba(232,115,79,.9), 0 0 26px rgba(232,115,79,.45); animation:neon 2.6s ease-in-out infinite; }
+h1 .tag { text-shadow:none; animation:none; letter-spacing:0; }
+@keyframes neon { 0%,100% { text-shadow:0 0 10px rgba(232,115,79,.9), 0 0 26px rgba(232,115,79,.45); }
+  50% { text-shadow:0 0 14px rgba(232,115,79,1), 0 0 38px rgba(232,115,79,.65); } }
 .bar { display:flex; gap:6px; flex-wrap:wrap; align-items:center; background:var(--card); border-radius:12px; padding:8px 12px; margin-bottom:8px; font-size:14px; }
 .bar b { color:var(--gold); }
 .meter { height:8px; border-radius:4px; background:#111; overflow:hidden; width:70px; display:inline-block; vertical-align:middle; }
@@ -47,7 +54,39 @@ body.ph-night #scene { --sky1:#181830; --sky2:#353555; }
 .cust .nm { font-size:11px; color:rgba(255,255,255,.9); text-shadow:0 1px 2px rgba(0,0,0,.6); }
 .fx { position:absolute; font-weight:bold; font-size:17px; pointer-events:none; z-index:5;
   animation:floatup 1.1s ease-out forwards; text-shadow:0 2px 3px rgba(0,0,0,.5); }
+.fx.big { font-size:27px; animation-duration:1.4s; }
 @keyframes floatup { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(-46px); } }
+/* 🎊 컨페티 */
+.confetti { position:fixed; top:-16px; width:9px; height:14px; z-index:60; border-radius:2px; pointer-events:none;
+  animation:confall 2.4s ease-in forwards; }
+@keyframes confall { to { transform:translateY(108vh) rotate(560deg); opacity:.85; } }
+/* 🔥 콤보 팝 */
+#comboPop { position:fixed; top:32%; left:50%; transform:translate(-50%,-50%); font-size:36px; color:var(--gold);
+  z-index:25; pointer-events:none; display:none; text-shadow:0 3px 10px rgba(0,0,0,.65); }
+#comboPop.pop { display:block; animation:cpop .75s ease-out forwards; }
+@keyframes cpop { 0% { transform:translate(-50%,-50%) scale(.3); opacity:0; }
+  30% { transform:translate(-50%,-50%) scale(1.3); opacity:1; } 100% { transform:translate(-50%,-50%) scale(1); opacity:0; } }
+/* 🌦 날씨 레이어 */
+#scene .wx { position:absolute; inset:0; pointer-events:none; z-index:2; }
+#scene .wx.rain { background:repeating-linear-gradient(75deg, transparent 0 13px, rgba(185,215,255,.3) 13px 14.5px);
+  animation:rainfall .45s linear infinite; }
+@keyframes rainfall { to { background-position:-24px 52px; } }
+#scene .wx.heat { background:linear-gradient(rgba(255,150,60,.16), transparent 65%); animation:heatwave 2.8s ease-in-out infinite; }
+@keyframes heatwave { 50% { opacity:.35; } }
+/* 😤 화난 손님 */
+.cust.angry .face { animation:angryshake .32s infinite; filter:drop-shadow(0 0 7px rgba(255,90,60,.8)); }
+.cust.angry .pat i { background:var(--bad) !important; }
+@keyframes angryshake { 25% { transform:rotate(-8deg); } 75% { transform:rotate(8deg); } }
+/* 🫕 어묵솥 김 */
+.potviz { position:absolute; left:10px; top:24px; font-size:22px; z-index:2; filter:drop-shadow(0 2px 3px rgba(0,0,0,.4)); }
+.potviz:before { content:'♨'; position:absolute; top:-13px; left:7px; font-size:13px; color:rgba(255,255,255,.75); animation:steam 1.7s infinite; }
+.potviz:after { content:'♨'; position:absolute; top:-10px; left:14px; font-size:10px; color:rgba(255,255,255,.55); animation:steam 1.7s .6s infinite; }
+@keyframes steam { 0% { transform:translateY(3px); opacity:0; } 40% { opacity:.85; } 100% { transform:translateY(-9px); opacity:0; } }
+/* 🔔 러시 열기 */
+body.ph-rush #scene { box-shadow: inset 0 -4px 12px rgba(0,0,0,.3), 0 0 22px rgba(240,140,60,.55); animation:rushglow 1.1s ease-in-out infinite; }
+@keyframes rushglow { 50% { box-shadow: inset 0 -4px 12px rgba(0,0,0,.3), 0 0 34px rgba(240,140,60,.85); } }
+/* 판정 텍스트 팝 */
+#mini .fb.pop { animation:cpop .5s ease-out; }
 @keyframes shake { 0%,100% { transform:translateX(0); } 25% { transform:translateX(-5px); } 75% { transform:translateX(5px); } }
 body.shaking { animation:shake .3s 2; }
 .grid { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; }
@@ -92,7 +131,8 @@ button.on { border-color:var(--gold); color:var(--gold); }
 <div class="bar" id="statbar"></div>
 <div id="rankbar" onclick="showBoard()"></div>
 <div id="hint" style="display:none"></div>
-<div id="scene"><div class="awning"></div><div class="signname">🍢 K-분식</div><div class="queue" id="queue"></div></div>
+<div id="scene"><div class="awning"></div><div class="signname">🍢 K-분식</div><div class="wx" id="wx"></div><div class="potviz" id="potviz" style="display:none">🫕</div><div class="queue" id="queue"></div></div>
+<div id="comboPop"></div>
 <div id="passerbyBox" class="grid"></div>
 <div id="hand"></div>
 <div class="grid" id="stations"></div>
@@ -407,17 +447,36 @@ const SFX = {
   news: () => { beep(523, 0.09, 'square', 0.03); beep(659, 0.12, 'square', 0.03, 0.12); },
 };
 window.toggleMute = () => { muted = !muted; localStorage.setItem('bunsik_mute', muted ? '1' : '0'); render(); };
-function fx(text, color) {
+function fx(text, color, big) {
   const scene = document.getElementById('scene');
   if (!scene) return;
   const e = document.createElement('div');
-  e.className = 'fx';
+  e.className = big ? 'fx big' : 'fx';
   e.textContent = text;
   e.style.color = color || 'var(--gold)';
-  e.style.left = (25 + Math.random() * 50) + '%';
-  e.style.top = (30 + Math.random() * 25) + '%';
+  e.style.left = (20 + Math.random() * 55) + '%';
+  e.style.top = (25 + Math.random() * 30) + '%';
   scene.appendChild(e);
-  setTimeout(() => e.remove(), 1150);
+  setTimeout(() => e.remove(), 1450);
+}
+function confetti(n) {
+  const colors = ['#e8734f', '#ecc94b', '#7fd18a', '#8fb8e8', '#e88ac0', '#f4ead6'];
+  for (let i = 0; i < (n || 28); i++) {
+    const d = document.createElement('div');
+    d.className = 'confetti';
+    d.style.left = Math.random() * 100 + 'vw';
+    d.style.background = colors[i % colors.length];
+    d.style.animationDelay = (Math.random() * .7) + 's';
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 3400);
+  }
+}
+window.confetti = confetti;
+function comboPop() {
+  const cp = document.getElementById('comboPop');
+  if (!cp) return;
+  cp.textContent = '🔥 ' + S.combo + ' 콤보!';
+  cp.classList.remove('pop'); void cp.offsetWidth; cp.classList.add('pop');
 }
 function shake() { document.body.classList.add('shaking'); setTimeout(() => document.body.classList.remove('shaking'), 700); }
 
@@ -580,7 +639,8 @@ function miniTap() {
   let sc, txt;
   if (err <= mini.zone/2) { sc=1; txt='완벽! ⭐'; SFX.good(); } else if (err <= mini.zone*1.2) { sc=.6; txt='좋아!'; SFX.tap(); } else { sc=.2; txt='이런…'; SFX.bad(); }
   mini.scores.push(sc); mini.round++;
-  $('miniFb').textContent = txt;
+  const fb = $('miniFb'); fb.textContent = txt;
+  fb.classList.remove('pop'); void fb.offsetWidth; fb.classList.add('pop');
   if (mini.round >= mini.total) {
     const avg = mini.scores.reduce((a,b)=>a+b,0)/mini.scores.length;
     let q = avg>=.8?3:avg>=.5?2:1;
@@ -664,12 +724,14 @@ function checkout(i, staff) {
   const regP = (c.elder ? .5 : .35) * (S.policy === 'premium' ? .6 : 1);   // 비싼 집엔 단골이 천천히 든다
   if (q >= 2 && !S.regulars[c.name] && canReg && Math.random() < regP) {
     S.regulars[c.name] = { visits: 1 };
+    fx('💜 단골!', '#e88ac0', true);
     log(`💜 ${c.name}${c.elder?'이(가)':' 학생이'} 단골이 됐다! (다음부터 참을성 있게 기다리고 잔돈도 잘 준다)`, 'y');
   } else if (S.regulars[c.name]) { S.regulars[c.name].visits++; }
   let react = QUAL.react[q-1]; if (q===3) react = react.replace('%s', menuById(c.items[0].id).name);
   if (paidNow) log(`💰 ${c.name}: "${react}" ${c.items.length>1?`(${c.items.length}가지) `:''}+${fmt(price)}${tip?` 잔돈+${tip}`:''}${cb?` 콤보+${cb}`:''}${!staff&&S.combo>=2?` 🔥x${S.combo}`:''}${c.elder?' (현금 💵)':''}${staff?` — ${staff} 응대`:''}`, staff?'d':'g');
-  SFX.coin(); fx(paidNow ? '+' + fmt(paidNow - fee) : '📒 외상', q === 3 ? '#ffd700' : '#aef0b8');
-  if (!staff && S.combo >= 3) fx('🔥 x' + S.combo, '#ff9a5a');
+  SFX.coin(); fx(paidNow ? '+' + fmt(paidNow - fee) : '📒 외상', q === 3 ? '#ffd700' : '#aef0b8', q === 3);
+  if (q === 3 && !staff) { for (let k = 0; k < 5; k++) fx('⭐', '#ffd700'); }   // ⭐3 별폭발
+  if (!staff && S.combo >= 3) comboPop();
   S.queue.splice(i,1);
   if (++S.servesSinceStain >= 3 && S.dirt < 6) { S.servesSinceStain = 0; S.dirt++; log('🧹 바닥에 얼룩이 생겼다… (' + S.dirt + '개)', 'd'); }
   if (typeof modFire === 'function') modFire('checkout', { customer: c, price, q });   // 🧩 모드 훅
@@ -851,6 +913,7 @@ function endEvent() {
 
 // ═══════════════ 🎓 튜토리얼 엔진 ═══════════════
 function tutPass(next, msg) {
+  confetti(next > 5 ? 60 : 26); SFX.bell();
   $('ledgerBody').innerHTML = next <= 5
     ? `<h2>🎉 ${TUT[S.tut].title} 통과!</h2>${msg || ''}<br><br><b>다음: ${TUT[next].title}</b><br>${TUT[next].tip}<br><br><button onclick="tutBegin(${next})">계속하기 →</button>`
     : `<h2>🎓 축하합니다!!</h2><b style="font-size:20px">이제 분식집을 오픈할 수 있습니다!</b><br><br>
@@ -1230,6 +1293,7 @@ window.closeout = (choice) => {
   save();
 };
 function showSeasonEnd(tag) {
+    confetti(50); SFX.bell();
     const asset = assetValue();
     $('ledgerBody').innerHTML = `<h2>🏁 시즌 종료 — ${tag || SEASON_DAYS + '일 완주!'}</h2>
 <b style="font-size:22px">최종 순자산 ${fmt(asset)}</b><br>
@@ -1407,7 +1471,8 @@ function render() {
   $('queue').innerHTML = S.queue.map((c,i) => {
     const undone = c.items.filter(x => !x.done);
     const match = (S.hand && undone.some(x => x.id === S.hand.id)) || (S.pot.n > 0 && undone.some(x => x.id === 'eomuk'));
-    return `<div class="cust ${match?'match':''}" onclick="serve(${i})">
+    const angry = c.pat < 10 && c.max < 9000;
+    return `<div class="cust ${match?'match':''}${angry?' angry':''}" onclick="serve(${i})">
       <div class="bubble">${c.items.map(x => x.done ? '✔' : menuById(x.id).emoji).join('')}${match?' 👉탭!':'!'}</div>
       <div class="face">${c.delivery?'🛵':c.togo?'🥡':c.elder?(ELDER_F.includes(c.name)?'👵':'👴'):(c.gender==='M'?'👦':'👧')}</div>
       <div class="nm">${c.reg?'💜':''}${c.name}</div>
@@ -1489,6 +1554,11 @@ function render() {
     hintEl.textContent = HINTS[S.phase] || '';
     hintEl.style.display = 'block';
   } else hintEl.style.display = 'none';
+  // 🌦 날씨 레이어 + 🫕 솥 김
+  const wxEl = $('wx');
+  if (wxEl) { const wid = S.wx && S.wx.id; wxEl.className = 'wx' + (wid === 'rain' ? ' rain' : wid === 'heat' ? ' heat' : ''); }
+  const pv = $('potviz');
+  if (pv) pv.style.display = (S.pot && S.pot.n > 0 && !S.tut) ? 'block' : 'none';
   if (nextDream && !S.tut) {
     $('topbar').innerHTML += `<span class="tag" style="width:100%">🎯 다음 꿈: ${nextDream.name} — ${Math.min(100,Math.floor(S.money/nextDream.cost*100))}% (${fmt(S.money)} / ${fmt(nextDream.cost)})</span>`;
   }
