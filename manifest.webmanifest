@@ -1,0 +1,17 @@
+{
+  "name": "K-분식집 — 지방 소도시 분식집 시뮬레이터",
+  "short_name": "K-분식집",
+  "description": "통계로 교정된 현실 분식집 경영 시뮬레이션. 창업 대출 2,000만원, 학사일정과 장마, 그리고 당신의 6개월.",
+  "lang": "ko",
+  "start_url": "./index.html?src=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a1a20",
+  "theme_color": "#1a1a20",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

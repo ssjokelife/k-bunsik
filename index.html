@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>🍢 K-분식집 — 영업일지</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1a1a20">
+<link rel="icon" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
 <style>
@@ -1829,7 +1835,7 @@ function renderHome() {
     <button class="menu" onclick="location.href='live.html'">🟢 라이브 현황판</button>
     ${tutDone ? `<button class="menu" onclick="replayTut()" style="opacity:.85">🎓 튜토리얼 다시 하기</button>` : ''}
     <div class="links">
-      <a href="mods.html">🧩 모드</a><a href="sim.html">📊 리포트</a><a href="model.html">📐 명세서</a>
+      <a href="mods.html">🧩 모드</a><a href="sim.html">📊 리포트</a><a href="model.html">📐 명세서</a><a href="privacy.html">개인정보</a>
     </div>
     <div class="ver">v2.6 · 통계로 교정된 현실 시뮬레이터 · 파산율 20%</div>`;
   el.style.display = 'flex';
@@ -1858,6 +1864,25 @@ window.replayTut = () => {
 };
 if (!location.search.includes('nohome')) renderHome();
 else window.PAUSE = false;
+
+// 📱 PWA — 서비스 워커 등록 + "앱으로 설치" 흐름
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstall = e;
+  const home = document.getElementById('home');
+  if (home && home.style.display !== 'none' && !document.getElementById('installBtn')) {
+    const b = document.createElement('button');
+    b.id = 'installBtn'; b.className = 'menu';
+    b.innerHTML = '📱 앱으로 설치<span>홈 화면에 추가 — 오프라인도 OK</span>';
+    b.onclick = async () => { if (!deferredInstall) return; deferredInstall.prompt(); await deferredInstall.userChoice; deferredInstall = null; b.remove(); };
+    const links = home.querySelector('.links');
+    if (links) home.insertBefore(b, links);
+  }
+});
 if (!localStorage.getItem('bunsik_guide_v1')) {
   localStorage.setItem('bunsik_guide_v1', '1');
   showGuide();
