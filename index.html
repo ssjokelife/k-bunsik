@@ -440,6 +440,22 @@ if (S.owner == null) S.owner = '';
 if (!LOADED && !localStorage.getItem('bunsik_tut_done') && !location.search.includes('notut')) { S.tut = 1; S.money = 0; }
 if (!S.owner) S.owner = localStorage.getItem('bunsik_owner') || '';
 if (S.tut == null) S.tut = 0;
+// 🌞 오늘의 영업 (일일 도전) — 실제 날짜 시드로 전국 공통 조건, 하루 순이익 승부
+function mulberry32(a) { return function() { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const DAILY_CODE = Number(new Date().toISOString().slice(0, 10).replace(/-/g, ''));
+const dailyFlag = localStorage.getItem('bunsik_daily');
+if (dailyFlag && !LOADED) {
+  S.tut = 0; S.daily = parseInt(dailyFlag);
+  const now = new Date(), doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+  S.day = (doy % 180) + 1;   // 오늘 날짜 → 시즌 달력의 하루로 매핑 (모두 동일)
+  S.money = 300000; S.rep = 50; S.loan = 0;
+  S.owner = localStorage.getItem('bunsik_owner') || '무명 분식';
+  MENUS.forEach(m => S.unlocked[m.id] = true);
+  S.stockLots = {}; syncStock();
+  ['tteok','eomuk','twigim','ramyeon','gimbap'].forEach(id => addStock(id, 6));
+}
+if (S.daily) Math.random = mulberry32(S.daily * 7919 + S.day);   // 🎲 전국 공통 시드
 const TUT = {
   1: { title: '1단계 · 주문과 조리', goal: '손님 5명에게 서빙하기', need: 5,
        tip: '손님 말풍선의 음식 → [🍲 조리] 버튼 → 움직이는 커서를 초록 구간에서 탭! → 완성되면 손님을 탭! (재료 걱정 없어요)' },
@@ -998,6 +1014,63 @@ ${S.tut === 5 ? `📮 주간 고지서까지 <b>${7 - S.tutDays}일</b> — 모�
 <button onclick="tutMorning()">🌅 다음 날 아침</button>`;
   $('ledger').style.display = 'flex'; save();
 }
+// ═══ 🌞 오늘의 영업 (일일 도전) ═══
+function dailyNight() {
+  setPhase('night'); S.queue = []; S.hand = null;
+  const L = S.led, profit = L.rev - L.spend;
+  S.dailyProfit = profit;
+  confetti(profit > 0 ? 24 : 0);
+  const d = new Date();
+  $('ledgerBody').innerHTML = `<h2>🌞 오늘의 영업 결과 — ${d.getMonth()+1}/${d.getDate()}</h2>
+순이익 <b style="font-size:20px;color:${profit>=0?'#3a7a3a':'#b04040'}">${profit>=0?'+':''}${fmt(profit)}</b><br>
+서빙 ${L.served}명 · 놓침 ${L.missed}명 · 객단가 ${fmt(Math.round(L.rev/Math.max(1,L.orders||1)))}<br>
+<span class="tag">오늘 전국의 사장님이 모두 같은 날씨·같은 손님 운으로 겨뤘습니다</span><br><br>
+<button onclick="submitDaily()">🏆 오늘의 랭킹에 올리기</button>
+<button onclick="endDaily()">🏠 홈으로 (본편 저장은 안전합니다)</button>`;
+  $('ledger').style.display = 'flex'; save();
+}
+window.submitDaily = async () => {
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/scores', {
+      method: 'POST',
+      headers: { ...SB_HDR, 'Content-Type': 'application/json', 'Content-Profile': 'bunsik', Prefer: 'return=minimal' },
+      body: JSON.stringify({ season: S.daily, nickname: (S.owner || '무명 분식').slice(0, 12).padEnd(2, '집'), day: 1,
+        asset: Math.max(-100000000, Math.min(1000000000, S.dailyProfit || 0)), client: 'daily' }),
+    });
+    if (!r.ok) throw 0;
+    localStorage.setItem('bunsik_daily_done', String(S.daily));
+    showDailyBoard();
+  } catch (e) { alert('랭킹 서버에 연결하지 못했어요 — 잠시 후 다시!'); }
+};
+async function showDailyBoard() {
+  let rows = [];
+  try {
+    const r = await fetch(SB_URL + `/rest/v1/scores?select=nickname,asset&season=eq.${S.daily}&order=asset.desc&limit=10`,
+      { headers: { ...SB_HDR, 'Accept-Profile': 'bunsik' } });
+    if (r.ok) rows = await r.json();
+  } catch (e) {}
+  const d = new Date();
+  $('ledgerBody').innerHTML = `<h2>🏆 ${d.getMonth()+1}/${d.getDate()} 오늘의 사장님들</h2>` +
+    (rows.map((x, i) => `${i+1}위 <b>${x.nickname}</b> — ${x.asset>=0?'+':''}${fmt(x.asset)}`).join('<br>') || '첫 번째 기록입니다!') +
+    `<br><br><span class="tag">내일 조건은 내일 공개 — 매일 아침 새로운 하루</span><br>
+<button onclick="endDaily()">🏠 홈으로</button>`;
+  $('ledger').style.display = 'flex';
+}
+window.endDaily = () => {
+  const b = localStorage.getItem('bunsik_main_backup');
+  if (b) localStorage.setItem('bunsik_v3', b); else localStorage.removeItem('bunsik_v3');
+  localStorage.removeItem('bunsik_daily'); localStorage.removeItem('bunsik_main_backup');
+  location.reload();
+};
+window.startDaily = () => {
+  if (!S.daily) {
+    if (!S.tut && LOADED) { save(); localStorage.setItem('bunsik_main_backup', localStorage.getItem('bunsik_v3') || ''); }
+    localStorage.removeItem('bunsik_v3');
+    localStorage.setItem('bunsik_daily', String(DAILY_CODE));
+    location.reload(); return;
+  }
+  startGame();
+};
 window.tutMorning = () => {
   $('ledger').style.display = 'none';
   S.led = {rev:0,spend:0,served:0,missed:0,fTry:0,fHit:0,bHit:0,tHit:0};
@@ -1135,6 +1208,7 @@ function ringBell() {
 }
 function doNight() {
   if (S.tut) { tutNight(); return; }   // 🎓 연습 정산은 단순하게
+  if (S.daily) { dailyNight(); return; }   // 🌞 오늘의 영업 정산
   if (typeof modFire === 'function') modFire('nightStart');   // 🧩 모드 훅
   setPhase('night');
   S.queue.forEach(c => log(`${c.name} 학생을 돌려보냈다…`, 'd'));
@@ -1811,7 +1885,7 @@ const UID = (() => { let u = localStorage.getItem('bunsik_uid');
   if (!u) { u = (crypto.randomUUID ? crypto.randomUUID() : 'u' + Date.now() + Math.floor(Math.random()*1e6)); localStorage.setItem('bunsik_uid', u); }
   return u; })();
 window.pingLive = async () => {
-  if (S.tut) return;
+  if (S.tut || S.daily) return;
   try {
     await fetch(SB_URL + '/rest/v1/live', { method: 'POST',
       headers: { ...SB_HDR, 'Content-Type': 'application/json', 'Content-Profile': 'bunsik', Prefer: 'resolution=merge-duplicates' },
@@ -1834,17 +1908,26 @@ if (!S.tut) pingLive();
 function renderHome() {
   const el = document.getElementById('home');
   const tutDone = !!localStorage.getItem('bunsik_tut_done');
-  const cont = LOADED && !S.tut;
+  const cont = LOADED && !S.tut && !S.daily;
+  // 🔴 단골 도장판 (출석)
+  const stamps = JSON.parse(localStorage.getItem('bunsik_stamps') || '[]');
+  const dToday = new Date(), dailyLabel = (dToday.getMonth()+1) + '/' + dToday.getDate();
+  const dailyDone = localStorage.getItem('bunsik_daily_done') === String(DAILY_CODE);
   el.innerHTML = `
     <div class="logo">🍢</div>
     <div class="title">K-분식집</div>
     <div class="slogan">지방 소도시 학교 앞, 당신의 6개월 — 방과후 스튜디오</div>
-    ${cont
+    ${S.daily
+      ? `<button class="menu hot" onclick="startGame()">🌞 오늘의 영업 계속하기<span>${dailyLabel} 전국 공통 조건 진행 중</span></button>
+         <button class="menu" onclick="endDaily()">🏠 본편으로 돌아가기</button>`
+      : cont
       ? `<button class="menu hot" onclick="startGame()">▶ 이어하기<span>🏪 ${S.owner || '무명 분식'} · D${S.day}/180 · 💰 ${fmt(S.money)}</span></button>
          <button class="menu" onclick="newSeason()">🌱 새 시즌 시작</button>`
       : S.tut
       ? `<button class="menu hot" onclick="startGame()">🎮 시작하기<span>🎓 튜토리얼부터 차근차근 (5분)</span></button>`
       : `<button class="menu hot" onclick="startGame()">🏪 개업하기<span>새 시즌 180일이 시작됩니다</span></button>`}
+    ${tutDone && !S.daily ? `<button class="menu" onclick="startDaily()" ${dailyDone?'style="opacity:.75"':''}>🌞 오늘의 영업 (${dailyLabel})<span>${dailyDone?'✅ 오늘 참여 완료 — 내일 또 만나요':'전국 공통 조건 · 하루 순이익 승부 · 6분'}</span></button>` : ''}
+    ${stamps.length ? `<div class="slogan" style="margin:2px 0">🔴 단골 도장 ${stamps.length % 10}/10 ${stamps.length >= 10 ? `· 도장판 ${Math.floor(stamps.length/10)}장 완성 🏅` : ''} <span style="opacity:.7">(${stamps.length}일 방문)</span></div>` : ''}
     <button class="menu on" onclick="document.getElementById('tester').style.display='flex'">🙋 정식 앱 테스터 모집<span>2주 설치 유지만! — 크레딧 등재 + 규칙 우선 구현권</span></button>
     <button class="menu" onclick="showBoard()">🏆 랭킹</button>
     <button class="menu" onclick="location.href='live.html'">🟢 라이브 현황판</button>
@@ -1860,6 +1943,10 @@ window.startGame = () => {
   document.getElementById('home').style.display = 'none';
   window.PAUSE = false;
   last = Date.now();   // 홈에 머문 시간은 게임 시간에서 제외
+  // 🔴 출석 도장
+  const today = new Date().toISOString().slice(0, 10);
+  const st = JSON.parse(localStorage.getItem('bunsik_stamps') || '[]');
+  if (!st.includes(today)) { st.push(today); localStorage.setItem('bunsik_stamps', JSON.stringify(st)); }
   render();
 };
 window.goHome = () => {
