@@ -106,7 +106,7 @@ button.on { border-color:var(--gold); color:var(--gold); }
 <h2>🍢 K-분식집 가이드</h2>
 <b>당신은 학교 앞 분식집 사장님.</b> 창업 대출 <b>2,000만원</b>을 안고 시작합니다.
 시즌(180일) 뒤 <b>순자산</b>으로 순위를 겨뤄요. 창업 첫 6개월의 진짜 점수는 <b>빚(2,000만)을 얼마나 줄였는가</b> —
-🤖 AI 사장(모범 운영)도 시즌 말 <b>-881만</b>입니다. 월소득 277만 — 통계청 식당업 평균(266만)의 현실 그대로예요.
+🤖 AI 사장(모범 운영)도 시즌 말 <b>-1,330만</b>입니다. 월소득 202만 — 통계청 소상공인 평균(208만)의 현실 그대로예요.
 <a href="sim.html" style="color:#8fb8e8">📊 AI 6유형 × 60시즌 현실성 리포트 보기</a>
 <h3>📅 하루의 흐름</h3>
 🌅 <b>새벽</b>: 재료 📦 사고 · 🔪 손질하고 · 🧹 청소 → <b>🔔 종을 치면 개점!</b><br>
@@ -118,6 +118,9 @@ button.on { border-color:var(--gold); color:var(--gold); }
 ④ 주문이 다 전달되면 자동 계산 💰
 <h3>💸 돈 조심</h3>
 매주 <b>고지서</b>(임대료+공과금+이자+생활비)가 오고, 부가세는 <b>간이과세</b>로 쌓였다가 <b>7월 25일에 한 방</b>에 옵니다. <b>번 돈이 다 내 돈이 아니에요.</b>
+<h3>🛵 채널과 CS</h3>
+배달앱에 입점하면 <b>비 오는 날·방학에도 주문</b>이 옵니다 — 대신 수수료 6.8%+배달비, 그리고 <b>별점</b>이 노출을 좌우해요.
+🥡 포장 손님은 자리를 안 차지하고, 😤 진상은 CS 방침(사과/원칙)대로 자동 응대됩니다.
 <h3>📅 학교 앞 장사는 달력이 반</h3>
 3월 2일 개학날 개업. 주말·시험기간엔 학생이 줄고, <b>여름방학(7/20~8/18)은 최대 보스</b> — 방학을 버틸 현금을 준비하세요. 비 오는 날은 어묵, 폭염엔 손님이 뜸해요.
 <h3>💡 생존 팁 3</h3>
@@ -133,9 +136,11 @@ button.on { border-color:var(--gold); color:var(--gold); }
 const MENUS = [
   { id:'tteok',  name:'떡볶이', emoji:'🍲', rounds:3, price:3000, unlock:0 },
   { id:'eomuk',  name:'어묵',   emoji:'🍢', rounds:2, price:700,  unlock:150000 },
+  { id:'twigim', name:'튀김',   emoji:'🍤', rounds:1, price:800,  unlock:200000 },
+  { id:'ramyeon',name:'라면',   emoji:'🍜', rounds:2, price:2500, unlock:250000 },
   { id:'gimbap', name:'김밥',   emoji:'🍙', rounds:3, price:2800, unlock:350000 },
 ];
-const ING = { tteok:{name:'떡·소스',cost:1150}, eomuk:{name:'어묵 꼬치',cost:300}, gimbap:{name:'김밥 재료',cost:1300} };   // 원가율 ~38% (실제 분식 35~40%)
+const ING = { tteok:{name:'떡·소스',cost:1150}, eomuk:{name:'어묵 꼬치',cost:300}, twigim:{name:'튀김 반죽·재료',cost:300}, ramyeon:{name:'라면·계란',cost:950}, gimbap:{name:'김밥 재료',cost:1300} };   // 원가율 ~38% (실제 분식 35~40%)
 const fmt = n => n.toLocaleString('ko-KR') + '원';
 const QUAL = { mul:[1,1.3,1.6], tip:[0,.15,.3], react:['😌 잘 먹었습니다','😋 맛있어요!','🤩 인생 %s!'] };
 const POLICY = {
@@ -191,6 +196,8 @@ const SCHOOL = {   // mul = 손님 간격 배수(클수록 한산), rush = 러�
   examEnd: { mul:.6,   rush:.35, badge:'🎉시험 끝!' },
   vacation:{ mul:1.75, rush:.85, badge:'🏖여름방학' },
   back:    { mul:.7,   rush:.4,  badge:'🏫개학 특수' },
+  children:{ mul:1.1,  rush:.8,  badge:'🎏어린이날' },
+  holiday: { mul:1.5,  rush:.85, badge:'🇰🇷공휴일' },
 };
 function calInfo(day) {
   let m = 3, d = 2 + (day - 1);
@@ -198,6 +205,8 @@ function calInfo(day) {
   const wd = (day - 1) % 7;
   let school = 'semester';
   if (day >= 141 && day <= 170) school = 'vacation';                          // 7/20 ~ 8/18
+  else if (day === 65) school = 'children';                                    // 5/5 어린이날 — 가족 나들이
+  else if (day === 97) school = 'holiday';                                     // 6/6 현충일
   else if (day === 60 || day === 121) school = 'examEnd';                      // 시험 마지막 날 = 해방 특수
   else if ((day >= 57 && day <= 60) || (day >= 117 && day <= 121)) school = 'exam';   // 중간·기말
   else if (day >= 171 && day <= 173) school = 'back';                          // 개학 특수 3일
@@ -245,12 +254,16 @@ function rollPool() {
   if (w.id === 'rain') locals = 12; else if (w.id === 'heat') locals = 11;
   students += Math.floor(S.rep / 25);                 // 평판 = 입소문 (최대 +4)
   locals += Math.floor(S.rep / 34);
+  if (cal.school === 'children') locals = Math.round(locals * 2.5);   // 🎏 나들이 가족들
+  if (cal.school === 'holiday') locals = Math.round(locals * 1.6);
+  if (S.relations) locals += 2;                       // 동네 관계를 챙기는 사장의 가게엔 이웃이 온다
+  if (S.relations && S.day === 77) locals = Math.round(locals * 2.2);   // 5/17 골목 축제 (상인회 참여자만)
   if ((S.saleStreak||0) >= 3) { students = Math.round(students*.9); locals = Math.round(locals*.9); }  // 떨이 소문의 대가
   return { students, locals };
 }
 
 // ═══════ 🥬 재료 수명 — 재고는 현금이 썩고 있는 모습이다 ═══════
-const LIFE = { tteok:3, eomuk:3, gimbap:2 };   // 사용 가능 일수 (김밥 재료가 제일 짧다). 손질분은 당일.
+const LIFE = { tteok:3, eomuk:3, twigim:2, ramyeon:5, gimbap:2 };   // 사용 가능 일수 (김밥 재료가 제일 짧다). 손질분은 당일.
 function addStock(id, n) { (S.stockLots[id] = S.stockLots[id] || []).push({ d: S.day, n }); syncStock(); }
 function takeStock(id) {   // 오래된 것부터 쓴다 (FIFO). 반환값 = 재료 나이(일)
   const lots = S.stockLots[id] || [];
@@ -275,6 +288,7 @@ function assetValue() {
   if (S.banner) v += 60000;
   Object.keys(S.stock).forEach(id => { v += (S.stock[id]||0) * ING[id].cost; });
   v += Math.floor(((S.credit && S.credit.out) || 0) * .8);   // 외상 채권 (회수율 80% 가정)
+  v += (S.savings || 0);   // 노란우산 적금 (압류 불가 계좌)
   v -= S.debt;
   v -= S.loan;   // 대출 잔액은 순자산에서 뺀다
   v -= (S.vatDue || 0);   // 쌓인 부가세는 언젠가 낼 돈 — 이미 부채다
@@ -312,6 +326,9 @@ const S = {
   loan:LOAN_START,
   wx:null, wxNext:null, vatDue:0, credit:{out:0,book:[]}, creditPolicy:true,
   pot:{n:0}, potTimer:0,
+  delivery:false, flag:false, rating:4.3, csPolicy:'sorry', relations:true,
+  booking:null, bookingOffer:null, savingsOn:false, savings:0,
+  refiOffered:false, refiDone:false, exitArm:false,
 };
 try { const sv = JSON.parse(localStorage.getItem('bunsik_v3')||'null'); if (sv && sv.day) Object.assign(S, sv); } catch(e) {}
 S.queue = []; S.passerby = null; S.hand = null;   // 휘발 상태는 리셋
@@ -327,6 +344,10 @@ S.poolDone = false;
 if (S.closeoutPending == null) S.closeoutPending = false;
 if (S.broken == null) { S.broken = false; S.brokenCost = 0; }
 if (!S.pot) { S.pot = { n: 0 }; S.potTimer = 0; }
+if (S.delivery == null) { S.delivery = false; S.flag = false; S.rating = 4.3; S.csPolicy = 'sorry';
+  S.relations = true; S.booking = null; S.bookingOffer = null; S.savingsOn = false; S.savings = 0;
+  S.refiOffered = false; S.refiDone = false; }
+S.exitArm = false;
 if (S.activeEvt) {   // 저장된 이벤트는 함수(on/off)를 잃는다 — id로 재연결, 없어진 이벤트(구 '비')는 해제
   const evDef = EVENTS.find(e => e.id === (S.activeEvt.def && S.activeEvt.def.id));
   if (evDef) S.activeEvt.def = evDef;
@@ -425,6 +446,7 @@ function menuWeight(m) {
     w *= wxNow().eomuk || 1;   // 비·꽃샘추위 = 국물 생각, 폭염 = 쳐다도 안 봄
   }
   if (m.id === 'gimbap' && (mon === 4 || mon === 5)) w *= 1.25;   // 소풍철 김밥
+  if (m.id === 'ramyeon' && wxNow().id === 'rain') w *= 1.6;      // 비 오는 날은 라면
   return w;
 }
 function pickOrder() {
@@ -456,7 +478,10 @@ function addCustomer(fromFlyer, g, nm) {
   // 👵 어르신 비중 = 남은 풀의 구성비 — 방학·주말엔 자연히 어르신이 가게를 지킨다
   const poolTot = organic ? S.pool.students + S.pool.locals : 1;
   const asElder = organic && Math.random() < (S.pool.locals / Math.max(1, poolTot));
-  if (S.queue.length >= slots()) {
+  const togo = organic && !asElder && Math.random() < .2;   // 🥡 포장 — 자리가 필요 없다
+  const seated = S.queue.filter(c => !c.togo && !c.delivery).length;
+  const full = togo ? S.queue.filter(c => c.togo).length >= 2 : seated >= slots();
+  if (full) {
     if (organic) {   // 줄 보고 돌아간 손님도 사라진 수요다
       if (asElder) S.pool.locals = Math.max(0, S.pool.locals - 1);
       else S.pool.students = Math.max(0, S.pool.students - 1);
@@ -475,15 +500,15 @@ function addCustomer(fromFlyer, g, nm) {
   const elder = NAMES_E.includes(name);
   const items = rollItems();
   if (elder && items.length > 2) items.length = 2;   // 어르신은 소식
-  const pat = patience() + (isReg ? 10 : 0) + (elder ? 15 : 0) + (items.length - 1) * 8;   // 여러 개 시키면 기다려준다
+  const pat = patience() + (isReg ? 10 : 0) + (elder ? 15 : 0) + (items.length - 1) * 8 + (togo ? 22 : 0);   // 여러 개 시키면 기다려준다, 포장은 "이따 올게요" (유연한 대기)
   const wantsCredit = elder && Math.random() < .35;   // "사장, 다음에 줄게~"
   if (organic) {   // 풀 소모 (최종 판정된 손님 유형 기준)
     if (elder) S.pool.locals = Math.max(0, S.pool.locals - 1);
     else S.pool.students = Math.max(0, S.pool.students - 1);
   }
-  S.queue.push({ name, gender, items, pat, max: pat, reg: isReg, elder, wantsCredit });
+  S.queue.push({ name, gender, items, pat, max: pat, reg: isReg, elder, wantsCredit, togo });
   const face = elder ? (ELDER_F.includes(name)?'👵':'👴') : (gender==='M'?'👦':'👧');
-  const otxt = items.map(it => menuById(it.id).emoji).join('');
+  const otxt = (togo?'🥡':'') + items.map(it => menuById(it.id).emoji).join('');
   if (elder) log(`${isReg?'💜 단골 ':''}${face} ${name} 도착 — "${otxt} 이거 줘 봐요"`, isReg?'g':'d');
   else log(`${isReg?'💜 단골 ':''}${face} ${name} 학생 도착 — "${otxt}${isReg?' 늘 먹던 걸로':''} 주세요!"${fromFlyer?' (전단지 보고 옴!)':''}`, (fromFlyer||isReg)?'g':'d');
   return true;
@@ -561,7 +586,7 @@ function checkout(i, staff) {
   });
   let tip = 0, cb = 0;
   if (!staff) {   // 팁·콤보는 사장이 직접 응대할 때만
-    const tipC = (S.ups.deco?.3:.1) + QUAL.tip[q-1] + POLICY[S.policy].tip + (c.reg?.2:0);
+    const tipC = c.delivery ? 0 : (S.ups.deco?.3:.1) + QUAL.tip[q-1] + POLICY[S.policy].tip + (c.reg?.2:0);
     tip = Math.random()<tipC ? 500 : 0;   // "잔돈은 됐어요!"
     const now = Date.now()/1000;
     S.combo = (now - S.comboAt < 20) ? S.combo+1 : 1; S.comboAt = now;
@@ -570,7 +595,16 @@ function checkout(i, staff) {
   }
   const gross = price+tip+cb;
   let paidNow = gross, fee = 0;
-  if (c.elder && c.wantsCredit && S.creditPolicy) {
+  if (c.delivery) {
+    // 🛵 배달 정산: 중개수수료 6.8% + 사장 부담 배달비 1,000원 — 그리고 별점이 남는다
+    const mid = Math.ceil(gross * .068), dfee = 1000;
+    fee = mid + dfee;
+    S.money += gross - fee; S.led.rev += gross; S.led.spend += fee;
+    S.led.dOrders = (S.led.dOrders||0) + 1;
+    if (q >= 3 && Math.random() < .3) { S.rating = Math.min(5, S.rating + .05); log(`🌟 배달 리뷰 ★5 "겉바속촉 최고예요" (평점 ${S.rating.toFixed(2)})`, 'g'); }
+    else if (q <= 1 && Math.random() < .5) { S.rating = Math.max(1, S.rating - .1); log(`💢 배달 리뷰 ★2 "다 불어서 왔네요" (평점 ${S.rating.toFixed(2)})`, 'b'); }
+    else S.rating = Math.min(5, S.rating + .02);   // 무난한 배달도 신뢰를 쌓는다
+  } else if (c.elder && c.wantsCredit && S.creditPolicy) {
     // 📒 외상 — 돈은 안 들어오지만 관계가 쌓인다
     paidNow = 0;
     S.credit.out += price; S.credit.book.push({ name: c.name, amt: price, day: S.day });
@@ -607,6 +641,31 @@ function checkCond() {
       S.money = Math.max(0, S.money - h); S.led.spend += h;
       log(`🏥 결국 병원행… 진료비 ${fmt(h)}. 몸이 자본이다 — 1인 가게의 최대 리스크`, 'b'); } }
   if (S.sick && S.cond >= 25) { S.sick = false; log('💪 몸이 좀 나아졌다!', 'g'); }
+}
+
+// ═══════════════ 🛵 배달앱 — 채널이 열리면 CS가 따라온다 ═══════════════
+let dTimer = 25;
+function deliveryTick(dt) {
+  if (!S.delivery || !isOpen()) return;
+  dTimer -= dt;
+  if (dTimer > 0) return;
+  const rt = S.rating >= 4.5 ? .8 : S.rating >= 4 ? 1 : S.rating >= 3.5 ? 1.4 : 2.2;   // 별점이 곧 노출
+  dTimer = 48 * (S.flag ? .6 : 1) * rt * (wxNow().id === 'rain' ? .55 : 1)   // 비 오면 배달 폭주
+         * (calInfo(S.day).school === 'vacation' ? .9 : 1);                  // 방학에도 배달은 산다
+  if (S.phase === 'rush') return;   // 🔕 러시엔 태블릿 정지 — 홀도 못 받는데 배달까지? (현실 사장의 철칙)
+  if (S.phase === 'open' && S.phaseLeft < 30) return;   // 러시 직전 접수도 금물 (곧 지옥이 온다)
+  if (S.queue.filter(c => c.delivery).length >= 2) return;   // 여력 없음 — 태블릿 알림 무시
+  const backlog = S.queue.reduce((a, c) => a + c.items.filter(x => !x.done).length, 0);
+  if (backlog > 2) return;   // 🧯 배달은 한가할 때만 받는다 — 접수 후 취소가 별점엔 최악
+  if (S.phase === 'evening' && Math.random() < .12) {
+    log('🛵 배달 주문이 떴지만… 콜 잡는 기사가 없다 (지방의 밤). 주문 취소', 'd');
+    return;
+  }
+  const r = Math.random(), count = r < .3 ? 1 : r < .8 ? 2 : 3;
+  const items = []; for (let k = 0; k < count; k++) items.push({ id: pickOrder().id, done: false, q: 0 });
+  S.queue.push({ name: '배달#' + Math.floor(100 + Math.random()*900), gender: 'M', items,
+    pat: 70, max: 70, delivery: true });
+  log(`🛵 배달 주문! ${items.map(it => menuById(it.id).emoji).join('')} — 기사 도착 전까지 포장 준비`, 'g');
 }
 
 // ═══════════════ 행인/마케팅 ═══════════════
@@ -700,6 +759,23 @@ function eventTick(dt) {
   evtTimer = 45 + Math.random()*35;
   if (S.day < 2 || S.phase === 'night') return;
   const biz = isOpen();
+  if (biz && Math.random() < .04) {   // 😤 진상 — 감정노동의 날 (CS 방침이 결과를 가른다)
+    if (S.delivery && Math.random() < .4) {
+      if (S.csPolicy === 'sorry') { S.money = Math.max(0, S.money - 12000); S.led.spend += 12000;
+        news('😤 배달 리뷰 협박: "환불 안 해주면 별점 테러 할게요" — 방침대로 환불 12,000원 (평점 사수)'); }
+      else { S.rating = Math.max(1, S.rating - .15);
+        news(`😤 별점 테러 ★1 "그냥 별로임" — 원칙 대응의 대가 (평점 ${S.rating.toFixed(2)})`); }
+    } else {
+      if (S.csPolicy === 'sorry') { S.money = Math.max(0, S.money - 8000); S.led.spend += 8000;
+        S.cond = Math.max(0, S.cond - 4); checkCond();
+        news('😤 "머리카락 나왔는데요?" (안 나왔다) — 사과하고 환불 8,000원. 속이 쓰리다 (♥-4)'); }
+      else if (Math.random() < .5) { S.rep = Math.max(0, S.rep - 6);
+        news('😤 진상과 언쟁… "사장 싸가지 없더라" 좁은 동네에 소문 (평판 -6)'); }
+      else { S.rep = Math.min(100, S.rep + 2);
+        news('😤 진상을 단호하게 정리 — 지켜보던 단골들이 통쾌해한다 (평판 +2)'); }
+    }
+    render(); return;
+  }
   if (biz && Math.random() < .04) {   // 위생 단속
     if (S.dirt >= 3) { S.rep=Math.max(0,S.rep-10); S.money=Math.max(0,S.money-150000); S.led.spend+=150000; news('🧑‍⚖️ 위생 단속! 얼룩 적발 — 과태료 150,000원 + 평판 -10 😱'); }
     else { S.rep=Math.min(100,S.rep+5); news('🧑‍⚖️ 위생 단속! 깨끗한 가게 인증 — 평판 +5 ✨'); }
@@ -752,6 +828,38 @@ function setPhase(p) {
     if (S.day === 60 || S.day === 121) news('🎉 시험 끝나는 날!! 해방된 학생들이 몰려온다 — 재고 쟁였는가!');
     if (w.id === 'rain') log('🌧 비 오는 날 — 홀 손님은 줄지만, 다들 따뜻한 어묵 국물을 찾는다', 'd');
     if (w.id === 'heat') log('🥵 폭염 — 손님도 없고 불 앞은 지옥이다. 몸 관리 조심', 'd');
+    // 🛵 깃발 광고비 (매일 선불 — 노출은 돈이다)
+    if (S.delivery && S.flag) {
+      if (S.money >= 3000) { S.money -= 3000; S.led.spend += 3000; }
+      else { S.flag = false; log('🚩 깃발 광고비 3,000원이 없어서 광고가 내려갔다…', 'b'); }
+    }
+    // 🏛 정책자금 대환 공고 (한 번뿐인 기회)
+    if (S.day === 62 && !S.refiOffered) {
+      S.refiOffered = true;
+      news('🏛 소상공인 정책자금 공고! 대출을 연 3.9%로 갈아탈 수 있다 (수수료 20만) — [🏛 대환 신청] 버튼');
+    }
+    // 📋 단체 예약 — 소풍철 지방 학교 앞의 목돈 기회 (그리고 도박)
+    if (!S.booking && !S.bookingOffer && S.unlocked.gimbap && cal.school === 'semester') {
+      const pB = (cal.m === 4 || cal.m === 5) ? .07 : .025;
+      if (Math.random() < pB) {
+        const nB = 10 + Math.floor(Math.random() * 15);
+        S.bookingOffer = { due: S.day + 2, n: nB, pay: Math.round(nB * 2800 * .92) };
+        news(`📋 단체 예약 문의! "${rnd(['해바라기 유치원','3학년 2반 학부모회','청년회'])}인데요, 모레 아침 김밥 ${nB}줄 되나요?" (${fmt(S.bookingOffer.pay)}) — 오늘 안에 수락 안 하면 다른 집으로`);
+      }
+    }
+    if (S.bookingOffer && S.bookingOffer.due - S.day < 2) S.bookingOffer = null;
+    if (S.booking && S.day >= S.booking.due) {   // 예약 이행일 새벽
+      if ((S.stock.gimbap||0) >= S.booking.n) {
+        for (let k = 0; k < S.booking.n; k++) takeStock('gimbap');
+        S.money += S.booking.pay; S.led.rev += S.booking.pay; S.weekRev += S.booking.pay;
+        S.rep = Math.min(100, S.rep + 3); S.cond = Math.max(0, S.cond - 15);
+        log(`📋 새벽 4시부터 김밥 ${S.booking.n}줄… 납품 완료!! +${fmt(S.booking.pay)} (평판 +3, 팔이 후들거린다)`, 'y');
+      } else {
+        S.rep = Math.max(0, S.rep - 10);
+        news(`📋💥 예약 펑크!! 김밥 재료가 ${S.stock.gimbap||0}/${S.booking.n}줄뿐… 온 동네가 안다 (평판 -10)`);
+      }
+      S.booking = null;
+    }
     // 🔧 설비는 예고 없이 죽는다 — 자영업 목돈 지출의 근원 (파산의 씨앗)
     if (!S.broken && S.day > 7 && Math.random() < .013) {
       S.broken = true; S.brokenCost = (3 + Math.floor(Math.random() * 6)) * 100000;
@@ -840,9 +948,12 @@ function doNight() {
   if (S.day % 7 === 0) {
     const vatAcc = Math.ceil(S.weekRev * VAT_SIMPLE);
     S.vatDue += vatAcc;
-    const interest = Math.ceil(S.loan * LOAN_RATE);
-    const bill = RENT + UTIL + interest + LIVING;
-    log(`🧾📮 주간 고지서! 임대료 ${fmt(RENT)} + 공과금 ${fmt(UTIL)} + 대출이자 ${fmt(interest)} + 생활비 ${fmt(LIVING)} = ${fmt(bill)}`, 'y');
+    const interest = Math.ceil(S.loan * LOAN_RATE * (S.refiDone ? .63 : 1));
+    const dues = S.relations ? 30000 : 0;   // 상인회비·경조사 부조 (관계는 공짜가 아니다)
+    const bill = RENT + UTIL + interest + LIVING + dues;
+    log(`🧾📮 주간 고지서! 임대료 ${fmt(RENT)} + 공과금 ${fmt(UTIL)} + 대출이자 ${fmt(interest)}${S.refiDone?'(대환 후)':''} + 생활비 ${fmt(LIVING)}${dues?` + 상인회·경조사 ${fmt(dues)}`:''} = ${fmt(bill)}`, 'y');
+    if (S.savingsOn && S.money > bill + 25000) { S.money -= 25000; S.savings += 25000;
+      log(`🐷 노란우산 적금 +25,000 (누적 ${fmt(S.savings)}) — 압류당하지 않는 내 돈`, 'd'); }
     if (vatAcc) log(`🧾 부가세 적립 +${fmt(vatAcc)} (간이과세 — 누적 ${fmt(S.vatDue)}, 7월 25일에 고지서가 온다. 쓰지 말고 모아두자)`, 'd');
     if (S.money >= bill) { S.money -= bill; L.spend += bill; }
     else {   // 내일 장사 밑천(5만)은 지키고, 부족분은 연체(빚)로 — 현실의 연체는 전액 압류가 아니다
@@ -958,7 +1069,7 @@ function doNight() {
 <button onclick="closeout('eat')">🥘 사장 저녁</button> <button onclick="closeout('trash')">🗑 폐기</button></div>` : '';
   $('ledgerBody').innerHTML = `<h2>🧾 영업 ${S.day}일차 정산</h2>
 매출 <b>${fmt(L.rev)}</b> · 지출 <b>-${fmt(L.spend)}</b><br>─────────────<br>순이익 <b style="color:${profit>=0?'#3a7a3a':'#b04040'}">${profit>=0?'+':''}${fmt(profit)}</b><br><br>
-서빙 ${L.served}명 · 놓침 ${L.missed}명 · 🚶줄 보고 돌아감 ${L.walked||0}명 · 🧾객단가 ${fmt(Math.round(L.rev/Math.max(1,L.orders||1)))}<br>📣 전단지 ${L.fHit}/${L.fTry} (${rate}%) · 🪧 ${L.bHit} · 🍡 ${L.tHit}<br>
+서빙 ${L.served}명${L.dOrders?` (🛵배달 ${L.dOrders}건)`:''} · 놓침 ${L.missed}명 · 🚶돌아감 ${L.walked||0}명 · 🧾객단가 ${fmt(Math.round(L.rev/Math.max(1,L.orders||1)))}<br>📣 전단지 ${L.fHit}/${L.fTry} (${rate}%) · 🪧 ${L.bHit} · 🍡 ${L.tHit}<br>
 정책 ${POLICY[S.policy].name} · ⭐평판 ${Math.floor(S.rep)} · 재료 ${stockLeft}개 · ♥${Math.floor(S.cond)}<br>
 ${wages?`💸 인건비 ${fmt(wages)} `:''}${branchGain?`🏪 2호점 +${fmt(branchGain)}`:''}${S.credit.out>0?` · 📒외상 ${fmt(S.credit.out)}`:''}${S.vatDue>0?` · 🧾부가세 적립 ${fmt(S.vatDue)}`:''}<br>
 ${closeHtml}
@@ -997,16 +1108,12 @@ window.closeout = (choice) => {
   if (el) el.innerHTML = msg;
   save();
 };
-function nextDay() {
-  if (S.closeoutPending) closeout('trash');   // 결정을 미루면 냉장고 앞에서 자동 폐기
-  $('ledger').style.display = 'none';
-  if (S.day >= SEASON_DAYS) {
-    // 🏁 시즌 종료!
+function showSeasonEnd(tag) {
     const asset = assetValue();
-    $('ledgerBody').innerHTML = `<h2>🏁 시즌 종료 — ${SEASON_DAYS}일 완주!</h2>
+    $('ledgerBody').innerHTML = `<h2>🏁 시즌 종료 — ${tag || SEASON_DAYS + '일 완주!'}</h2>
 <b style="font-size:22px">최종 순자산 ${fmt(asset)}</b><br>
 (현금 ${fmt(S.money)} + 설비·투자 + 재고 − 빚)<br>
-<span class="tag">창업 대출 2,000만에서 시작한 첫 6개월 — 빚을 줄인 만큼이 실력입니다 (🤖 AI 모범 사장: -881만)</span><br><br>
+<span class="tag">창업 대출 2,000만에서 시작한 첫 6개월 — 빚을 줄인 만큼이 실력입니다 (🤖 AI 모범 사장: -1,330만)</span><br><br>
 ⭐평판 ${Math.floor(S.rep)} · 💜단골 ${Object.keys(S.regulars).length}명 · 🧑알바 ${S.staffList.length}명<br>
 🚨 노동청 신고 ${S.reports}회 · 🏪 2호점 ${S.branch?'달성!':'미달성'} · 🏦 대출 ${S.loan>0?fmt(S.loan)+' 남음':'완제!'}<br>
 ${S.credit.out>0?`📒 못 받은 외상 ${fmt(S.credit.out)} (80%만 자산 인정) · `:''}${S.vatDue>0?`🧾 부가세 예정 -${fmt(S.vatDue)}`:''}<br><br>
@@ -1015,10 +1122,13 @@ ${S.credit.out>0?`📒 못 받은 외상 ${fmt(S.credit.out)} (80%만 자산 인
 <button onclick="exportLedger()">📜 시즌 일지 내보내기</button>
 <button onclick="localStorage.removeItem('bunsik_v3');location.reload()">🌱 새 시즌 시작</button>`;
     $('ledger').style.display = 'flex';
-    D('seasonEnd', `순자산 ${asset}`);
+    D('seasonEnd', `순자산 ${asset}${tag||''}`);
     save();
-    return;
-  }
+}
+function nextDay() {
+  if (S.closeoutPending) closeout('trash');   // 결정을 미루면 냉장고 앞에서 자동 폐기
+  $('ledger').style.display = 'none';
+  if (S.day >= SEASON_DAYS) { showSeasonEnd(''); return; }
   S.day++; S.cond = Math.min(100, S.cond+45); checkCond();
   S.led = {rev:0,spend:0,served:0,missed:0,fTry:0,fHit:0,bHit:0,tHit:0};
   S.combo = 0; setPhase('dawn'); save();
@@ -1066,6 +1176,37 @@ const A = {
   credit() { S.creditPolicy = !S.creditPolicy;
     log(S.creditPolicy ? '📒 외상을 받기로 했다 — 대부분 갚지만, 가끔 못 받는다. 대신 어르신 단골이 늘 것이다'
                        : '📒 외상 사절! — 떼일 걱정은 없지만, 어르신들이 서운해한다', 'y'); render(); },
+  delivery() { if (S.delivery) return;
+    S.delivery = true;
+    log('🛵 배달앱 입점! 태블릿이 설치됐다 — 중개수수료 6.8%+배달비 1,000원/건, 그리고 이제 별점(★)이 나를 평가한다', 'y'); render(); },
+  flagAd() { if (!S.delivery) return;
+    S.flag = !S.flag;
+    log(S.flag ? '🚩 깃발 광고 ON — 일 3,000원, 노출이 늘어난다 (광고비는 매일 새벽 선불)' : '🚩 깃발 광고 OFF', 'y'); render(); },
+  cs() { S.csPolicy = S.csPolicy === 'sorry' ? 'firm' : 'sorry';
+    log(S.csPolicy === 'sorry' ? '😤 CS 방침: 무조건 사과 — 돈과 속은 쓰리지만 평판·별점은 지킨다'
+                               : '😤 CS 방침: 원칙 대응 — 돈은 안 잃지만, 소문과 별점 테러를 각오한다', 'y'); render(); },
+  rel() { S.relations = !S.relations;
+    log(S.relations ? '🤝 동네 관계를 챙기기로 했다 — 회비·부조가 나가지만 이웃 발길과 축제가 온다'
+                    : '🤝 동네 관계 무심 모드 — 돈은 아끼지만, 지방에서 혼자는 외롭다', 'y'); render(); },
+  saveOn() { S.savingsOn = !S.savingsOn;
+    log(S.savingsOn ? '🐷 노란우산 적금 가입 — 주 25,000원. 빚쟁이도 못 건드는 내 마지막 돈'
+                    : '🐷 적금 중단 (해둔 돈은 유지)', 'y'); render(); },
+  refi() { if (!S.refiOffered || S.refiDone) return;
+    if (S.money < 200000) return log('대환 수수료 20만원이 없다…', 'b');
+    S.money -= 200000; S.led.spend += 200000; S.refiDone = true;
+    log('🏛 정책자금 대환 완료! 연 6.2% → 3.9% — 매주 이자가 37% 줄어든다. 아는 것이 돈이다', 'g'); render(); },
+  book() { if (!S.bookingOffer) return;
+    S.booking = S.bookingOffer; S.bookingOffer = null;
+    log(`📋 예약 수락! ${S.booking.due - S.day}일 뒤 새벽까지 김밥 재료 ${S.booking.n}개 확보 필수 — 펑크 나면 온 동네가 안다`, 'y'); render(); },
+  exit() {
+    if (!S.exitArm) { S.exitArm = true;
+      log('🏳 정말 가게를 내놓으시겠어요? 권리금을 받고 시즌이 여기서 끝납니다 — 한 번 더 누르면 확정', 'y'); render(); return; }
+    const gw = 3000000 + Math.round(S.rep) * 30000 + (S.remodel ? 800000 : 0) + Object.keys(S.ups).length * 100000;
+    S.money += gw;
+    log(`🏳 가게를 넘겼다… 권리금 ${fmt(gw)}. ${S.day}일간의 장사가 여기서 끝났다`, 'y');
+    D('exit', `D${S.day} 권리금 ${gw}`);
+    showSeasonEnd(`D${S.day} 중도 매각 (권리금 ${fmt(gw)})`);
+  },
   unlock(id) { const m = menuById(id); if (S.money<m.unlock) return log(`${m.name} 설비는 ${fmt(m.unlock)}!`,'b');
     S.money-=m.unlock; S.led.spend+=m.unlock; S.unlocked[id]=true; log(`${m.emoji} ${m.name} 설비 설치 완료!! 새 메뉴 개시`,'g'); render(); },
   upgrade() { const up = UPGRADES[S.upIdx]; if (!up) return; if (S.money<up.cost) return log(`${up.name}은 ${fmt(up.cost)}!`,'b');
@@ -1133,14 +1274,14 @@ function render() {
     ${S.activeEvt?`<span style="color:var(--gold)">${S.activeEvt.def.icon}${S.activeEvt.def.name}</span>`:''}
     <span style="margin-left:auto"><b>💰 ${fmt(S.money)}</b></span>`;
   $('statbar').innerHTML = `♥<span class="meter"><i style="width:${S.cond}%;background:${S.cond<30?'#e88a7a':'#7fd18a'}"></i></span>
-    ${S.loan>0?`<span style="color:#e8a15a">🏦${Math.round(S.loan/10000)}만</span>`:'🎉완제'} ⭐${Math.floor(S.rep)} 💜${Object.keys(S.regulars).length} ${S.credit.out>0?`📒${Math.round(S.credit.out/1000)}천`:''} ${S.vatDue>0?`🧾${Math.round(S.vatDue/10000)}만`:''} 🧹${S.dirt>0?`얼룩${S.dirt}`:'깨끗'} 📣${S.flyers}장 ${S.debt>0?`<span style="color:var(--bad)">💳빚 ${fmt(S.debt)}</span>`:''} ${S.sick?'🤒몸살!':''} ${S.resting?'🪑쉬는 중':''}
+    ${S.loan>0?`<span style="color:#e8a15a">🏦${Math.round(S.loan/10000)}만</span>`:'🎉완제'} ⭐${Math.floor(S.rep)} ${S.delivery?`🛵${S.rating.toFixed(1)}`:''} 💜${Object.keys(S.regulars).length} ${S.savings>0?`🐷${Math.round(S.savings/10000)}만`:''} ${S.credit.out>0?`📒${Math.round(S.credit.out/1000)}천`:''} ${S.vatDue>0?`🧾${Math.round(S.vatDue/10000)}만`:''} 🧹${S.dirt>0?`얼룩${S.dirt}`:'깨끗'} 📣${S.flyers}장 ${S.debt>0?`<span style="color:var(--bad)">💳빚 ${fmt(S.debt)}</span>`:''} ${S.sick?'🤒몸살!':''} ${S.resting?'🪑쉬는 중':''}
     <span style="margin-left:auto" class="tag">${POLICY[S.policy].name}·${STYLES[S.style].name}</span>`;
   $('queue').innerHTML = S.queue.map((c,i) => {
     const undone = c.items.filter(x => !x.done);
     const match = (S.hand && undone.some(x => x.id === S.hand.id)) || (S.pot.n > 0 && undone.some(x => x.id === 'eomuk'));
     return `<div class="cust ${match?'match':''}" onclick="serve(${i})">
       <div class="bubble">${c.items.map(x => x.done ? '✔' : menuById(x.id).emoji).join('')}${match?' 👉탭!':'!'}</div>
-      <div class="face">${c.elder?(ELDER_F.includes(c.name)?'👵':'👴'):(c.gender==='M'?'👦':'👧')}</div>
+      <div class="face">${c.delivery?'🛵':c.togo?'🥡':c.elder?(ELDER_F.includes(c.name)?'👵':'👴'):(c.gender==='M'?'👦':'👧')}</div>
       <div class="nm">${c.reg?'💜':''}${c.name}</div>
       <div class="pat"><i style="width:${c.pat/c.max*100}%;background:${c.pat<10?'#e88a7a':'#7fd18a'}"></i></div></div>`;
   }).join('') || `<span class="tag" style="padding:26px 20px;color:rgba(255,255,255,.7)">${isOpen()?'손님을 기다리는 중…':'🌙 영업 전'}</span>`;
@@ -1178,7 +1319,17 @@ function render() {
     <button onclick="A.style()">🧢 ${STYLES[S.style].name}</button>
     <button class="${S.resting?'on':''}" onclick="A.rest()">🪑 ${S.resting?'일어나기':'쉬기'}</button>
     <button class="${S.creditPolicy?'on':''}" onclick="A.credit()">📒 외상 ${S.creditPolicy?'받음':'사절'}</button>
+    <button onclick="A.cs()">😤 CS: ${S.csPolicy==='sorry'?'사과':'원칙'}</button>
+    <button class="${S.relations?'on':''}" onclick="A.rel()">🤝 동네 ${S.relations?'챙김':'무심'}</button>
     ${S.broken?`<button style="border-color:var(--bad)" onclick="A.repair()">🔧 수리 ${fmt(S.brokenCost)}</button>`:''}
+    ${S.bookingOffer?`<button class="hot" onclick="A.book()">📋 예약 수락<br><span class="tag">김밥 ${S.bookingOffer.n}줄 ${fmt(S.bookingOffer.pay)}</span></button>`:''}
+    ${S.booking?`<span class="tag">📋 D-${Math.max(0,S.booking.due-S.day)} 김밥 ${S.booking.n}줄 (재고 ${S.stock.gimbap||0})</span>`:''}
+    <div class="grp">🛵 채널·금융</div>
+    <button class="${S.delivery?'on':''}" onclick="A.delivery()">🛵 배달앱 ${S.delivery?`★${S.rating.toFixed(1)}`:'입점'}</button>
+    ${S.delivery?`<button class="${S.flag?'on':''}" onclick="A.flagAd()">🚩 깃발 ${S.flag?'ON':'OFF'}<br><span class="tag">일 3천원</span></button>`:''}
+    <button class="${S.savingsOn?'on':''}" onclick="A.saveOn()">🐷 노란우산 ${S.savingsOn?'ON':'OFF'}</button>
+    ${S.refiOffered&&!S.refiDone?`<button class="hot" onclick="A.refi()">🏛 대환 신청<br><span class="tag">연 6.2→3.9% (20만)</span></button>`:''}
+    ${S.day>30?`<button onclick="A.exit()" ${S.exitArm?'style="border-color:var(--bad)"':''}>🏳 ${S.exitArm?'매각 확정?!':'가게 내놓기'}</button>`:''}
     <div class="grp">🎯 투자와 꿈</div>
     ${up?`<button onclick="A.upgrade()">⬆ ${up.name} ${fmt(up.cost)}<br><span class="tag">${up.desc}</span></button>`:''}
     ${DREAMS.filter(dreamAvail)
@@ -1261,7 +1412,7 @@ async function refreshBoard() {
 function renderRankbar() {
   const el = document.getElementById('rankbar');
   if (!el) return;
-  const rows = [...(boardCache || []), { nickname: '🤖 AI 사장', asset: -8810000 }]
+  const rows = [...(boardCache || []), { nickname: '🤖 AI 사장', asset: -13300000 }]
     .sort((a, b) => b.asset - a.asset);
   const my = assetValue();
   let rank = rows.findIndex(r => my >= r.asset);
@@ -1284,7 +1435,7 @@ window.showBoard = async () => {
     });
     if (!r.ok) { log('🏆 순위표를 불러올 수 없어요 (서버 준비 중 — ' + r.status + ')', 'b'); return; }
     const rows = await r.json();
-    const aiLine = { nickname: '🤖 AI 사장', asset: -8810000, day: 180, branch: false };
+    const aiLine = { nickname: '🤖 AI 사장', asset: -13300000, day: 180, branch: false };
     const all = [...rows, aiLine].sort((a, b) => b.asset - a.asset);
     document.getElementById('ledgerBody').innerHTML = '<h2>🏆 시즌 1 순위표</h2>' +
       (all.map((r2, i) => `${i+1}위 <b>${r2.nickname}</b> — ${fmt(r2.asset)} <span class="tag">(${r2.day}일${r2.branch?' · 🏪2호점':''})</span>`).join('<br>') || '아직 기록 없음') +
@@ -1339,7 +1490,9 @@ function gameTick(dt) {
       const c = S.queue[i]; c.pat -= dt;
       if (c.pat <= 0) {
         SFX.bad(); fx('💢 ' + c.name + ' 놓침!', '#ff8a7a');
-        if (c.reg) { log(`💔 단골 ${c.name}을(를) 놓쳤다!! "여기 변했네…" (단골 이탈, 평판 -5)`, 'b');
+        if (c.delivery) { S.rating = Math.max(1, S.rating - .08);
+          log(`🛵💢 조리 지연으로 배달 취소… 리뷰 ★1 "한 시간 걸린대요" (평점 ${S.rating.toFixed(2)})`, 'b'); }
+        else if (c.reg) { log(`💔 단골 ${c.name}을(를) 놓쳤다!! "여기 변했네…" (단골 이탈, 평판 -5)`, 'b');
           delete S.regulars[c.name]; S.rep=Math.max(0,S.rep-5); }
         else { log(`💢 ${c.name}${c.elder?'이(가)':' 학생이'} 화나서 가버렸다! (콤보 끊김, 평판 -3)`, 'b'); S.rep=Math.max(0,S.rep-3); }
         S.queue.splice(i,1); S.led.missed++; S.combo=0; changed=true;
@@ -1348,7 +1501,7 @@ function gameTick(dt) {
     }
     if (changed) render();
   }
-  passerbyTick(dt); eventTick(dt); staffTick(dt);
+  passerbyTick(dt); deliveryTick(dt); eventTick(dt); staffTick(dt);
   if (S.evtCd>0) S.evtCd -= dt;
   // 가벼운 UI 갱신 (1초마다)
   const now = Date.now();
