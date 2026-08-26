@@ -106,15 +106,16 @@ button.on { border-color:var(--gold); color:var(--gold); }
 <h2>🍢 K-분식집 가이드</h2>
 <b>당신은 학교 앞 분식집 사장님.</b> 창업 대출 <b>2,000만원</b>을 안고 시작합니다.
 시즌(180일) 뒤 <b>순자산</b>으로 순위를 겨뤄요. 창업 첫 6개월의 진짜 점수는 <b>빚(2,000만)을 얼마나 줄였는가</b> —
-🤖 AI 사장(모범 운영)도 시즌 말 <b>-1,135만</b>입니다. 월소득 234만 — 통계청 소상공인 평균(208만)의 현실 그대로예요.
+🤖 AI 사장(모범 운영)도 시즌 말 <b>-881만</b>입니다. 월소득 277만 — 통계청 식당업 평균(266만)의 현실 그대로예요.
 <a href="sim.html" style="color:#8fb8e8">📊 AI 6유형 × 60시즌 현실성 리포트 보기</a>
 <h3>📅 하루의 흐름</h3>
 🌅 <b>새벽</b>: 재료 📦 사고 · 🔪 손질하고 · 🧹 청소 → <b>🔔 종을 치면 개점!</b><br>
 ☀️ <b>영업</b>: 조리하고 서빙 → 🔔 <b>하교 러시</b>(대목!) → 🌆 저녁 → 🔔 종으로 마감 → 🧾 정산
 <h3>🍳 조리와 서빙 (핵심!)</h3>
-① 손님 카드에 주문이 떠요 (🍲 떡볶이!)<br>
-② <b>[🍲 조리]</b> 버튼 → 움직이는 커서를 <b>초록 구간에서 탭</b> — 잘 맞추면 ⭐⭐⭐ (비싸게 팔림!)<br>
-③ 완성되면 <b>초록 테두리 손님 카드를 탭</b> = 서빙 완료 💰
+① 손님이 <b>1~3가지를 조합 주문</b>해요 (🍲🍢 "떡볶이에 어묵 하나요!") — 메뉴가 많을수록 객단가↑<br>
+② <b>[🍲 조리]</b> 버튼 → 커서를 <b>초록 구간에서 탭</b> — 잘 맞추면 ⭐⭐⭐ · 완성되면 손님 카드 탭 = 전달<br>
+③ 🫕 <b>어묵은 솥에 끓여두면 국자로 즉시 서빙</b> (조리 불필요!) — 단, 안 저으면 불어요<br>
+④ 주문이 다 전달되면 자동 계산 💰
 <h3>💸 돈 조심</h3>
 매주 <b>고지서</b>(임대료+공과금+이자+생활비)가 오고, 부가세는 <b>간이과세</b>로 쌓였다가 <b>7월 25일에 한 방</b>에 옵니다. <b>번 돈이 다 내 돈이 아니에요.</b>
 <h3>📅 학교 앞 장사는 달력이 반</h3>
@@ -134,7 +135,7 @@ const MENUS = [
   { id:'eomuk',  name:'어묵',   emoji:'🍢', rounds:2, price:700,  unlock:150000 },
   { id:'gimbap', name:'김밥',   emoji:'🍙', rounds:3, price:2800, unlock:350000 },
 ];
-const ING = { tteok:{name:'떡·소스',cost:1000}, eomuk:{name:'어묵 꼬치',cost:250}, gimbap:{name:'김밥 재료',cost:1100} };
+const ING = { tteok:{name:'떡·소스',cost:1150}, eomuk:{name:'어묵 꼬치',cost:300}, gimbap:{name:'김밥 재료',cost:1300} };   // 원가율 ~38% (실제 분식 35~40%)
 const fmt = n => n.toLocaleString('ko-KR') + '원';
 const QUAL = { mul:[1,1.3,1.6], tip:[0,.15,.3], react:['😌 잘 먹었습니다','😋 맛있어요!','🤩 인생 %s!'] };
 const POLICY = {
@@ -235,11 +236,11 @@ const NAMES_E = ['순자 할머니','병철 할아버지','말순 할머니','�
 const ELDER_F = ['순자 할머니','말순 할머니','정심 이모'];
 
 // ═══════ 🚶 일일 수요 풀 — 지방 소도시의 손님은 유한하다 (하루 상권 = 오늘 올 수 있는 손님 수) ═══════
-const POOL_STUDENTS = { semester:52, sat:24, sun:14, exam:34, examEnd:64, vacation:16, back:60 };
+const POOL_STUDENTS = { semester:45, sat:21, sun:12, exam:30, examEnd:56, vacation:14, back:52 };
 function rollPool() {
   const cal = calInfo(S.day), w = wxNow();
   let students = POOL_STUDENTS[cal.school] || 38;
-  let locals = 18;                                    // 주민·어르신 — 지방의 기반 수요
+  let locals = 16;                                    // 주민·어르신 — 지방의 기반 수요
   students = Math.round(students / w.gap / S.evtGap); // 궂은 날·악재엔 유동인구부터 준다
   if (w.id === 'rain') locals = 12; else if (w.id === 'heat') locals = 11;
   students += Math.floor(S.rep / 25);                 // 평판 = 입소문 (최대 +4)
@@ -260,6 +261,10 @@ function takeStock(id) {   // 오래된 것부터 쓴다 (FIFO). 반환값 = 재
   syncStock(); return age;
 }
 function syncStock() { MENUS.forEach(m => { S.stock[m.id] = (S.stockLots[m.id]||[]).reduce((a, l) => a + l.n, 0); }); }
+
+// 🫕 어묵솥 — 국자질은 조리가 아니다. 끓여두면 즉시 서빙, 대신 안 저으면 붇는다 (병렬 관리의 시작)
+const POT_MAX = 10, POT_STALE = 110;   // 110초 방치 = 불은 어묵 (품질 ⭐)
+function potFresh() { return (S.potTimer || 0) < POT_STALE; }
 function assetValue() {
   let v = S.money;
   UPGRADES.forEach(u => { if (S.ups[u.id]) v += u.cost; });
@@ -306,6 +311,7 @@ const S = {
   weekRev:0, debt:0, regulars:{}, reports:0, suspension:0,
   loan:LOAN_START,
   wx:null, wxNext:null, vatDue:0, credit:{out:0,book:[]}, creditPolicy:true,
+  pot:{n:0}, potTimer:0,
 };
 try { const sv = JSON.parse(localStorage.getItem('bunsik_v3')||'null'); if (sv && sv.day) Object.assign(S, sv); } catch(e) {}
 S.queue = []; S.passerby = null; S.hand = null;   // 휘발 상태는 리셋
@@ -320,6 +326,7 @@ S.saleStreak = S.saleStreak || 0;
 S.poolDone = false;
 if (S.closeoutPending == null) S.closeoutPending = false;
 if (S.broken == null) { S.broken = false; S.brokenCost = 0; }
+if (!S.pot) { S.pot = { n: 0 }; S.potTimer = 0; }
 if (S.activeEvt) {   // 저장된 이벤트는 함수(on/off)를 잃는다 — id로 재연결, 없어진 이벤트(구 '비')는 해제
   const evDef = EVENTS.find(e => e.id === (S.activeEvt.def && S.activeEvt.def.id));
   if (evDef) S.activeEvt.def = evDef;
@@ -428,6 +435,14 @@ function pickOrder() {
   for (const m of av) { r -= menuWeight(m); if (r <= 0) return m; }
   return av[av.length-1];
 }
+// 🧾 복합 주문 — "떡볶이 하나에 어묵 둘이요" (해금 메뉴가 많을수록 객단가가 오른다)
+function rollItems() {
+  const r = Math.random();
+  const count = r < .45 ? 1 : r < .85 ? 2 : 3;
+  const items = [];
+  for (let k = 0; k < count; k++) items.push({ id: pickOrder().id, done: false, q: 0 });
+  return items;
+}
 function addCustomer(fromFlyer, g, nm) {
   // 🚶 수요 풀: 오늘 올 수 있는 손님은 유한하다 (전단지·현수막·시식 손님은 마케팅이 만든 추가 수요)
   const organic = !fromFlyer && !nm;
@@ -458,17 +473,19 @@ function addCustomer(fromFlyer, g, nm) {
     name = rnd(regNames); isReg = true;
   } else isReg = !!S.regulars[name];
   const elder = NAMES_E.includes(name);
-  const order = pickOrder();
-  const pat = patience() + (isReg ? 10 : 0) + (elder ? 15 : 0);   // 어르신은 느긋하다
+  const items = rollItems();
+  if (elder && items.length > 2) items.length = 2;   // 어르신은 소식
+  const pat = patience() + (isReg ? 10 : 0) + (elder ? 15 : 0) + (items.length - 1) * 8;   // 여러 개 시키면 기다려준다
   const wantsCredit = elder && Math.random() < .35;   // "사장, 다음에 줄게~"
   if (organic) {   // 풀 소모 (최종 판정된 손님 유형 기준)
     if (elder) S.pool.locals = Math.max(0, S.pool.locals - 1);
     else S.pool.students = Math.max(0, S.pool.students - 1);
   }
-  S.queue.push({ name, gender, order, pat, max: pat, reg: isReg, elder, wantsCredit });
+  S.queue.push({ name, gender, items, pat, max: pat, reg: isReg, elder, wantsCredit });
   const face = elder ? (ELDER_F.includes(name)?'👵':'👴') : (gender==='M'?'👦':'👧');
-  if (elder) log(`${isReg?'💜 단골 ':''}${face} ${name} 도착 — "${order.emoji} ${order.name} 하나 줘 봐요"`, isReg?'g':'d');
-  else log(`${isReg?'💜 단골 ':''}${face} ${name} 학생 도착 — "${order.emoji} ${order.name}${isReg?' 늘 먹던 걸로':''} 주세요!"${fromFlyer?' (전단지 보고 옴!)':''}`, (fromFlyer||isReg)?'g':'d');
+  const otxt = items.map(it => menuById(it.id).emoji).join('');
+  if (elder) log(`${isReg?'💜 단골 ':''}${face} ${name} 도착 — "${otxt} 이거 줘 봐요"`, isReg?'g':'d');
+  else log(`${isReg?'💜 단골 ':''}${face} ${name} 학생 도착 — "${otxt}${isReg?' 늘 먹던 걸로':''} 주세요!"${fromFlyer?' (전단지 보고 옴!)':''}`, (fromFlyer||isReg)?'g':'d');
   return true;
 }
 
@@ -518,15 +535,39 @@ $('tapBtn').addEventListener('pointerdown', e => { e.preventDefault(); miniTap()
 // ═══════════════ 서빙 ═══════════════
 function serve(i) {
   const c = S.queue[i];
-  if (!c || !S.hand || S.hand.id !== c.order.id) return;
-  const q = S.hand.q;
-  let price = Math.ceil(menuPrice(c.order) * QUAL.mul[q-1] * POLICY[S.policy].mul);
-  const tipC = (S.ups.deco?.3:.1) + QUAL.tip[q-1] + POLICY[S.policy].tip + (c.reg?.2:0);
-  const tip = Math.random()<tipC ? 500 : 0;   // "잔돈은 됐어요!"
-  const now = Date.now()/1000;
-  S.combo = (now - S.comboAt < 20) ? S.combo+1 : 1; S.comboAt = now;
-  const cb = Math.min(500, (S.combo-1)*250);   // 콤보는 잔돈 — 진짜 보상은 돈이 아니라 흐름(평판·입소문)
-  if (S.combo >= 5 && S.combo % 5 === 0) S.rep = Math.min(100, S.rep + 1);   // "저 집 회전 봐라" 소문
+  if (!c) return;
+  let delivered = false;
+  if (S.hand) {   // ① 손에 든 접시가 주문의 미완 항목과 맞으면 전달
+    const it = c.items.find(x => !x.done && x.id === S.hand.id);
+    if (it) { it.done = true; it.q = S.hand.q; S.hand = null; delivered = true; }
+  }
+  if (!delivered && S.pot.n > 0) {   // ② 어묵은 솥에서 국자로 바로 — 국자질은 조리가 아니다
+    const soup = c.items.find(x => !x.done && x.id === 'eomuk');
+    if (soup) {
+      S.pot.n--; soup.done = true; soup.q = potFresh() ? 2 : 1; delivered = true;
+      if (!potFresh()) log('🍢 어묵이 불었다… 솥 좀 저어주세요 (품질 ⭐)', 'd');
+    }
+  }
+  if (!delivered) return;
+  if (c.items.some(x => !x.done)) { SFX.tap(); render(); return; }   // 주문이 아직 남았다
+  checkout(i, null);   // ③ 전 항목 완료 — 계산!
+}
+function checkout(i, staff) {
+  const c = S.queue[i];
+  let price = 0, q = 1;
+  c.items.forEach(it => {
+    price += Math.ceil(menuPrice(menuById(it.id)) * QUAL.mul[(it.q||1)-1] * POLICY[S.policy].mul);
+    q = Math.max(q, it.q || 1);
+  });
+  let tip = 0, cb = 0;
+  if (!staff) {   // 팁·콤보는 사장이 직접 응대할 때만
+    const tipC = (S.ups.deco?.3:.1) + QUAL.tip[q-1] + POLICY[S.policy].tip + (c.reg?.2:0);
+    tip = Math.random()<tipC ? 500 : 0;   // "잔돈은 됐어요!"
+    const now = Date.now()/1000;
+    S.combo = (now - S.comboAt < 20) ? S.combo+1 : 1; S.comboAt = now;
+    cb = Math.min(500, (S.combo-1)*250);   // 콤보는 잔돈 — 진짜 보상은 돈이 아니라 흐름(평판·입소문)
+    if (S.combo >= 5 && S.combo % 5 === 0) S.rep = Math.min(100, S.rep + 1);   // "저 집 회전 봐라" 소문
+  }
   const gross = price+tip+cb;
   let paidNow = gross, fee = 0;
   if (c.elder && c.wantsCredit && S.creditPolicy) {
@@ -542,7 +583,7 @@ function serve(i) {
     fee = Math.ceil(gross * CARD_FEE);
     S.money += gross - fee; S.led.rev += gross; S.led.spend += fee; S.led.cardFee = (S.led.cardFee||0) + fee;
   }
-  S.led.served++;
+  S.led.served++; S.led.orders = (S.led.orders||0) + 1;
   if (q===3) S.rep = Math.min(100, S.rep+2); else if (q===2) S.rep = Math.min(100, S.rep+1);
   // 💜 단골 등록: 좋은 경험(★2+)을 한 손님은 단골이 될 수 있다 (외상 거절당한 어르신은 예외)
   const canReg = !(c.elder && c.wantsCredit && !S.creditPolicy);
@@ -550,11 +591,11 @@ function serve(i) {
     S.regulars[c.name] = { visits: 1 };
     log(`💜 ${c.name}${c.elder?'이(가)':' 학생이'} 단골이 됐다! (다음부터 참을성 있게 기다리고 잔돈도 잘 준다)`, 'y');
   } else if (S.regulars[c.name]) { S.regulars[c.name].visits++; }
-  let react = QUAL.react[q-1]; if (q===3) react = react.replace('%s', c.order.name);
-  if (paidNow) log(`💰 ${c.name}: "${react}" +${fmt(price)}${tip?` 잔돈+${tip}`:''}${cb?` 콤보+${cb}`:''}${S.combo>=2?` 🔥x${S.combo}`:''}${c.elder?' (현금 💵)':''}`, 'g');
+  let react = QUAL.react[q-1]; if (q===3) react = react.replace('%s', menuById(c.items[0].id).name);
+  if (paidNow) log(`💰 ${c.name}: "${react}" ${c.items.length>1?`(${c.items.length}가지) `:''}+${fmt(price)}${tip?` 잔돈+${tip}`:''}${cb?` 콤보+${cb}`:''}${!staff&&S.combo>=2?` 🔥x${S.combo}`:''}${c.elder?' (현금 💵)':''}${staff?` — ${staff} 응대`:''}`, staff?'d':'g');
   SFX.coin(); fx(paidNow ? '+' + fmt(paidNow - fee) : '📒 외상', q === 3 ? '#ffd700' : '#aef0b8');
-  if (S.combo >= 3) fx('🔥 x' + S.combo, '#ff9a5a');
-  S.queue.splice(i,1); S.hand = null;
+  if (!staff && S.combo >= 3) fx('🔥 x' + S.combo, '#ff9a5a');
+  S.queue.splice(i,1);
   if (++S.servesSinceStain >= 3 && S.dirt < 6) { S.servesSinceStain = 0; S.dirt++; log('🧹 바닥에 얼룩이 생겼다… (' + S.dirt + '개)', 'd'); }
   render();
 }
@@ -615,24 +656,24 @@ function staffTick(dt) {
     cleanTimer -= dt;
     if (cleanTimer <= 0) { cleanTimer = 12 / effOf(staffOf('clean')[0]); S.dirt--; log(`🧹 ${staffOf('clean')[0].name}이(가) 얼룩을 치웠다 (${S.dirt}개 남음)`, 'd'); }
   }
+  const kitchens = staffOf('kitchen');
+  if (kitchens.length && S.pot.n > 0 && (S.potTimer||0) > 60) {
+    S.potTimer = 0; log(`🥄 ${kitchens[0].name}이(가) 어묵솥을 저었다`, 'd');
+  }
   const halls = staffOf('hall');
   if (halls.length && isOpen()) {
     hallTimer -= dt;
     if (hallTimer <= 0) {
       hallTimer = 9 / halls.reduce((a, st) => a + effOf(st), 0);   // 임금 = 사기 = 속도
-      const i = S.queue.findIndex(c => (S.stock[c.order.id]||0) > 0);
+      const pick = c => c.items.find(x => !x.done && (x.id === 'eomuk' ? (S.pot.n > 0 || (S.stock.eomuk||0) > 0) : (S.stock[x.id]||0) > 0));
+      const i = S.queue.findIndex(c => pick(c));
       if (i >= 0) {
-        const c = S.queue[i];
-        takeStock(c.order.id);
-        let star = staffStar(halls[0]);   // 근속이 실력이 된다
-        if (S.broken) star = 1;
-        const price = Math.ceil(menuPrice(c.order) * QUAL.mul[star-1] * POLICY[S.policy].mul);
-        const fee = Math.ceil(price * CARD_FEE);
-        S.money += price - fee; S.led.rev += price; S.led.spend += fee; S.led.cardFee = (S.led.cardFee||0) + fee;
-        S.led.served++;
-        log(`🤝 ${halls[0].name}이(가) ${c.name} 학생에게 ${c.order.emoji} 서빙 (+${fmt(price)}, ${'⭐'.repeat(star)})`, 'd');
-        S.queue.splice(i, 1);
-        if (++S.servesSinceStain >= 3 && S.dirt < 6) { S.servesSinceStain = 0; S.dirt++; }
+        const c = S.queue[i], it = pick(c);
+        if (it.id === 'eomuk' && S.pot.n > 0) { S.pot.n--; it.q = potFresh() ? 2 : 1; }
+        else { takeStock(it.id); let star = staffStar(halls[0]); if (S.broken) star = Math.min(star, 2); it.q = star; }   // 근속이 실력이 된다
+        it.done = true;
+        if (!c.items.some(x => !x.done)) checkout(i, halls[0].name);
+        else if (++S.servesSinceStain >= 3 && S.dirt < 6) { S.servesSinceStain = 0; S.dirt++; }
       }
     }
   }
@@ -747,6 +788,10 @@ function setPhase(p) {
         for (let k=0; k<2; k++) if ((S.stock[m.id]||0)>0 && (S.prepped[m.id]||0)<5 && done<cap) { takeStock(m.id); S.prepped[m.id]=(S.prepped[m.id]||0)+1; done++; }
       });
       if (done) log(`🍳 ${st.name}이(가) 새벽 손질 ${done}개를 해뒀다`, 'd');
+      if (S.unlocked.eomuk && S.pot.n < POT_MAX && (S.stock.eomuk||0) > 0) {
+        let n2 = 0; while (S.pot.n < POT_MAX && (S.stock.eomuk||0) > 0) { takeStock('eomuk'); S.pot.n++; n2++; }
+        if (n2) { S.potTimer = 0; log(`🫕 ${st.name}이(가) 어묵솥을 미리 끓여뒀다 (솥 ${S.pot.n}/${POT_MAX})`, 'd'); }
+      }
     });
     if (S.activeEvt) { S.activeEvt.left--; if (S.activeEvt.left<=0) endEvent(); else news(`${S.activeEvt.def.icon} ${S.activeEvt.def.name} — 남은 기간 ${S.activeEvt.left}일`); }
   }
@@ -780,6 +825,8 @@ function doNight() {
     S.prepped[m.id] = 0;
     if (n > 0) leftover[m.id] = n;
   });
+  if (S.pot.n > 0) { leftover.eomuk = (leftover.eomuk || 0) + S.pot.n; S.pot.n = 0; }   // 온종일 담근 어묵은 내일 못 판다
+  S.potTimer = 0;
   syncStock();
   S.leftover = leftover;
   S.closeoutPending = Object.keys(leftover).length > 0;
@@ -911,7 +958,7 @@ function doNight() {
 <button onclick="closeout('eat')">🥘 사장 저녁</button> <button onclick="closeout('trash')">🗑 폐기</button></div>` : '';
   $('ledgerBody').innerHTML = `<h2>🧾 영업 ${S.day}일차 정산</h2>
 매출 <b>${fmt(L.rev)}</b> · 지출 <b>-${fmt(L.spend)}</b><br>─────────────<br>순이익 <b style="color:${profit>=0?'#3a7a3a':'#b04040'}">${profit>=0?'+':''}${fmt(profit)}</b><br><br>
-서빙 ${L.served}명 · 놓침 ${L.missed}명 · 🚶줄 보고 돌아감 ${L.walked||0}명<br>📣 전단지 ${L.fHit}/${L.fTry} (${rate}%) · 🪧 ${L.bHit} · 🍡 ${L.tHit}<br>
+서빙 ${L.served}명 · 놓침 ${L.missed}명 · 🚶줄 보고 돌아감 ${L.walked||0}명 · 🧾객단가 ${fmt(Math.round(L.rev/Math.max(1,L.orders||1)))}<br>📣 전단지 ${L.fHit}/${L.fTry} (${rate}%) · 🪧 ${L.bHit} · 🍡 ${L.tHit}<br>
 정책 ${POLICY[S.policy].name} · ⭐평판 ${Math.floor(S.rep)} · 재료 ${stockLeft}개 · ♥${Math.floor(S.cond)}<br>
 ${wages?`💸 인건비 ${fmt(wages)} `:''}${branchGain?`🏪 2호점 +${fmt(branchGain)}`:''}${S.credit.out>0?` · 📒외상 ${fmt(S.credit.out)}`:''}${S.vatDue>0?` · 🧾부가세 적립 ${fmt(S.vatDue)}`:''}<br>
 ${closeHtml}
@@ -959,7 +1006,7 @@ function nextDay() {
     $('ledgerBody').innerHTML = `<h2>🏁 시즌 종료 — ${SEASON_DAYS}일 완주!</h2>
 <b style="font-size:22px">최종 순자산 ${fmt(asset)}</b><br>
 (현금 ${fmt(S.money)} + 설비·투자 + 재고 − 빚)<br>
-<span class="tag">창업 대출 2,000만에서 시작한 첫 6개월 — 빚을 줄인 만큼이 실력입니다 (🤖 AI 모범 사장: -1,135만)</span><br><br>
+<span class="tag">창업 대출 2,000만에서 시작한 첫 6개월 — 빚을 줄인 만큼이 실력입니다 (🤖 AI 모범 사장: -881만)</span><br><br>
 ⭐평판 ${Math.floor(S.rep)} · 💜단골 ${Object.keys(S.regulars).length}명 · 🧑알바 ${S.staffList.length}명<br>
 🚨 노동청 신고 ${S.reports}회 · 🏪 2호점 ${S.branch?'달성!':'미달성'} · 🏦 대출 ${S.loan>0?fmt(S.loan)+' 남음':'완제!'}<br>
 ${S.credit.out>0?`📒 못 받은 외상 ${fmt(S.credit.out)} (80%만 자산 인정) · `:''}${S.vatDue>0?`🧾 부가세 예정 -${fmt(S.vatDue)}`:''}<br><br>
@@ -1004,6 +1051,11 @@ const A = {
   policy() { const i = POLICY_ORDER.indexOf(S.policy); S.policy = POLICY_ORDER[(i+1)%3]; log(`💲 가격 정책: ${POLICY[S.policy].name}`); render(); },
   style() { const i = STYLE_ORDER.indexOf(S.style); S.style = STYLE_ORDER[(i+1)%3]; log(`오늘의 스타일: ${STYLES[S.style].name}`); render(); },
   rest() { S.resting = !S.resting; log(S.resting?'🪑 의자에 앉아 쉰다… (회복 3배)':'다시 일어났다!'); render(); },
+  pot() { if (!S.unlocked.eomuk) return log('어묵 설비가 없어요!','b');
+    let n2 = 0; while (S.pot.n < POT_MAX && (S.stock.eomuk||0) > 0) { takeStock('eomuk'); S.pot.n++; n2++; }
+    if (n2) { S.potTimer = 0; log(`🫕 어묵 ${n2}꼬치를 솥에 담갔다 — 이제 국자만 뜨면 바로 서빙 (솥 ${S.pot.n}/${POT_MAX})`); }
+    else log('솥에 넣을 어묵 재고가 없다 — 📦 발주부터!','b'); render(); },
+  stir() { if (S.pot.n <= 0) return; S.potTimer = 0; log('🥄 솥을 저었다 — 국물이 다시 살아난다'); render(); },
   repair() { if (!S.broken) return;
     const cash = Math.min(S.money, S.brokenCost), rest = S.brokenCost - cash;
     S.money -= cash; S.led.spend += S.brokenCost; S.broken = false;
@@ -1084,16 +1136,18 @@ function render() {
     ${S.loan>0?`<span style="color:#e8a15a">🏦${Math.round(S.loan/10000)}만</span>`:'🎉완제'} ⭐${Math.floor(S.rep)} 💜${Object.keys(S.regulars).length} ${S.credit.out>0?`📒${Math.round(S.credit.out/1000)}천`:''} ${S.vatDue>0?`🧾${Math.round(S.vatDue/10000)}만`:''} 🧹${S.dirt>0?`얼룩${S.dirt}`:'깨끗'} 📣${S.flyers}장 ${S.debt>0?`<span style="color:var(--bad)">💳빚 ${fmt(S.debt)}</span>`:''} ${S.sick?'🤒몸살!':''} ${S.resting?'🪑쉬는 중':''}
     <span style="margin-left:auto" class="tag">${POLICY[S.policy].name}·${STYLES[S.style].name}</span>`;
   $('queue').innerHTML = S.queue.map((c,i) => {
-    const match = S.hand && S.hand.id===c.order.id;
+    const undone = c.items.filter(x => !x.done);
+    const match = (S.hand && undone.some(x => x.id === S.hand.id)) || (S.pot.n > 0 && undone.some(x => x.id === 'eomuk'));
     return `<div class="cust ${match?'match':''}" onclick="serve(${i})">
-      <div class="bubble">${c.order.emoji} ${c.order.name}${match?' 👉탭!':'!'}</div>
-      <div class="face">${c.gender==='M'?'👦':'👧'}</div>
+      <div class="bubble">${c.items.map(x => x.done ? '✔' : menuById(x.id).emoji).join('')}${match?' 👉탭!':'!'}</div>
+      <div class="face">${c.elder?(ELDER_F.includes(c.name)?'👵':'👴'):(c.gender==='M'?'👦':'👧')}</div>
       <div class="nm">${c.reg?'💜':''}${c.name}</div>
       <div class="pat"><i style="width:${c.pat/c.max*100}%;background:${c.pat<10?'#e88a7a':'#7fd18a'}"></i></div></div>`;
   }).join('') || `<span class="tag" style="padding:26px 20px;color:rgba(255,255,255,.7)">${isOpen()?'손님을 기다리는 중…':'🌙 영업 전'}</span>`;
   $('passerbyBox').innerHTML = S.passerby ? `<button class="hot" onclick="A_giveFlyer()">🚶 ${S.passerby.gender==='M'?'👦':'👧'} ${S.passerby.name} 학생이 지나간다! ${S.flyers>0&&!S.hand?'📣 전단지 주기':'(전단지 없음/손 참)'}</button>` : '';
   $('hand').textContent = S.hand ? `🤲 들고 있음: ${menuById(S.hand.id).emoji} ${'⭐'.repeat(S.hand.q)} — 주문 맞는 손님을 탭!` : '';
-  $('stations').innerHTML = MENUS.map(m => S.unlocked[m.id]
+  $('stations').innerHTML = (S.unlocked.eomuk ? `<button class="hot" onclick="A.stir()">🫕 솥 ${S.pot.n}/${POT_MAX}<br><span class="tag">${S.pot.n>0?(potFresh()?'끓는 중·탭=젓기':'⚠️불음! 탭=젓기'):'비었음'}</span></button>
+       <button onclick="A.pot()">🍢 솥 채우기<br><span class="tag">재고→솥 (즉시서빙)</span></button>` : '') + MENUS.map(m => S.unlocked[m.id]
     ? `<button class="hot" onclick="startCook('${m.id}')">${m.emoji} 조리<br><span class="tag">재고${S.stock[m.id]||0}${(S.prepped[m.id]||0)?` 🔪${S.prepped[m.id]}`:''} 숙련${S.skill[m.id]||0}</span></button>
        <button onclick="A.order('${m.id}')">📦 +5<br><span class="tag">${ingCost(m.id)*5}원${S.evtCost[m.id]?'⚠️':''}</span></button>`
     : `<button onclick="A.unlock('${m.id}')">🔒 ${m.name} 설비<br><span class="tag">${fmt(m.unlock)}</span></button>`).join('');
@@ -1207,7 +1261,7 @@ async function refreshBoard() {
 function renderRankbar() {
   const el = document.getElementById('rankbar');
   if (!el) return;
-  const rows = [...(boardCache || []), { nickname: '🤖 AI 사장', asset: -11350000 }]
+  const rows = [...(boardCache || []), { nickname: '🤖 AI 사장', asset: -8810000 }]
     .sort((a, b) => b.asset - a.asset);
   const my = assetValue();
   let rank = rows.findIndex(r => my >= r.asset);
@@ -1230,7 +1284,7 @@ window.showBoard = async () => {
     });
     if (!r.ok) { log('🏆 순위표를 불러올 수 없어요 (서버 준비 중 — ' + r.status + ')', 'b'); return; }
     const rows = await r.json();
-    const aiLine = { nickname: '🤖 AI 사장', asset: -11350000, day: 180, branch: false };
+    const aiLine = { nickname: '🤖 AI 사장', asset: -8810000, day: 180, branch: false };
     const all = [...rows, aiLine].sort((a, b) => b.asset - a.asset);
     document.getElementById('ledgerBody').innerHTML = '<h2>🏆 시즌 1 순위표</h2>' +
       (all.map((r2, i) => `${i+1}위 <b>${r2.nickname}</b> — ${fmt(r2.asset)} <span class="tag">(${r2.day}일${r2.branch?' · 🏪2호점':''})</span>`).join('<br>') || '아직 기록 없음') +
@@ -1274,6 +1328,8 @@ function gameTick(dt) {
     $('cur').style.left = `calc(${mini.t*100}% - 4px)`; }
   // 컨디션 회복
   if (!mini && S.phase !== 'rush') { S.cond = Math.min(100, S.cond + 0.6*dt*(S.resting?3:1)); checkCond(); }   // 러시 중엔 숨 돌릴 틈이 없다
+  // 🫕 방치된 솥은 붇는다
+  if (S.pot.n > 0 && isOpen()) S.potTimer = (S.potTimer || 0) + dt;
   // 손님 스폰/인내심
   if (isOpen()) {
     custTimer -= dt;
