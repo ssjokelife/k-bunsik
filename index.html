@@ -268,7 +268,7 @@ function rollPool() {
   if (S.relations) locals += 2;                       // 동네 관계를 챙기는 사장의 가게엔 이웃이 온다
   if (S.relations && S.day === 77) locals = Math.round(locals * 2.2);   // 5/17 골목 축제 (상인회 참여자만)
   if ((S.saleStreak||0) >= 3) { students = Math.round(students*.9); locals = Math.round(locals*.9); }  // 떨이 소문의 대가
-  return { students, locals };
+  return (typeof modFire === 'function') ? modFire('pool', { students, locals }) : { students, locals };   // 🧩 모드 훅
 }
 
 // ═══════ 🥬 재료 수명 — 재고는 현금이 썩고 있는 모습이다 ═══════
@@ -641,6 +641,7 @@ function checkout(i, staff) {
   if (!staff && S.combo >= 3) fx('🔥 x' + S.combo, '#ff9a5a');
   S.queue.splice(i,1);
   if (++S.servesSinceStain >= 3 && S.dirt < 6) { S.servesSinceStain = 0; S.dirt++; log('🧹 바닥에 얼룩이 생겼다… (' + S.dirt + '개)', 'd'); }
+  if (typeof modFire === 'function') modFire('checkout', { customer: c, price, q });   // 🧩 모드 훅
   render();
 }
 
@@ -899,6 +900,7 @@ function setPhase(p) {
     } else {
       log(`${S.day}일차 아침. 장보기·손질·청소하고 종을 치세요 (${T.dawn}초 후 자동 개점)`, 'd');
     }
+    if (typeof modFire === 'function') modFire('dawn');   // 🧩 모드 훅
     staffOf('kitchen').forEach(st => {
       let done = 0;
       const cap = st.wage < MIN_WAGE ? 2 : 3;   // 사기 저하 = 손이 느리다
@@ -925,6 +927,7 @@ function ringBell() {
   else if (isOpen()) { log('🔔 오늘 영업 끝! 마감합니다', 'y'); doNight(); }
 }
 function doNight() {
+  if (typeof modFire === 'function') modFire('nightStart');   // 🧩 모드 훅
   setPhase('night');
   S.queue.forEach(c => log(`${c.name} 학생을 돌려보냈다…`, 'd'));
   S.queue = [];
@@ -1351,6 +1354,8 @@ function render() {
     <button onclick="exportLedger()">📜 경영일지</button>
     <button onclick="location.href='sim.html'">📊 현실성 리포트</button>
     <button onclick="location.href='model.html'">📐 모델 명세서</button>
+    <button class="hot" onclick="suggestRule()">💡 규칙 제안</button>
+    <button onclick="location.href='mods.html'">🧩 모드 ${window.ACTIVE_MODS&&ACTIVE_MODS.length?`(${ACTIVE_MODS.length})`:''}</button>
     <button onclick="showGuide()">❓ 가이드</button>`;
   // 👉 신규 사장 힌트 (첫 3일)
   const hintEl = $('hint');
@@ -1397,7 +1402,7 @@ window.submitScore = async () => {
     money: S.money, loan: S.loan, branch: S.branch,
     reports: S.reports, regulars: Object.keys(S.regulars).length,
     ledger: { decisions: (S.decisions || []).slice(-6000) },
-    client: 'web-v1',
+    client: 'web-v1' + (window.ACTIVE_MODS && ACTIVE_MODS.length ? '+mods:' + ACTIVE_MODS.join(',') : ''),
   };
   try {
     const r = await fetch(SB_URL + '/rest/v1/scores', {
@@ -1469,6 +1474,44 @@ window.exportLedger = () => {
   log(`📜 경영일지 ${S.decisions.length}건 내보내기 완료 — 이 기록이 바이블의 재료가 됩니다`, 'y');
 };
 window.G = S;   // 디버그/테스트 훅
+
+// ═══════════════ 🧩 모드 시스템 — 유저 요청 → Claude 구현 → 그 유저 버전에만 장착 ═══════════════
+// 사용: index.html?mods=jangnal,겨울어묵  → mods/<이름>.js 로드. 코어는 하나, 동네는 여럿.
+const MODS = { hooks: {} };
+window.MODS = MODS;
+window.modOn = (ev, fn) => { (MODS.hooks[ev] = MODS.hooks[ev] || []).push(fn); };
+function modFire(ev, arg) {
+  let v = arg;
+  (MODS.hooks[ev] || []).forEach(f => { try { const r = f(v); if (r !== undefined) v = r; } catch (e) {} });
+  return v;
+}
+window.ACTIVE_MODS = (new URLSearchParams(location.search).get('mods') || '').split(',').filter(Boolean);
+ACTIVE_MODS.forEach(m => {
+  const sc = document.createElement('script');
+  sc.src = 'mods/' + m.replace(/[^a-zA-Z0-9_\-가-힣]/g, '') + '.js';
+  sc.onload = () => log(`🧩 모드 장착: ${m} — 이 동네만의 규칙이 켜졌다`, 'y');
+  sc.onerror = () => log(`🧩 모드 로드 실패: ${m}`, 'b');
+  document.body.appendChild(sc);
+});
+
+// 💡 규칙 제안 — 접수되면 Claude가 그 유저 전용 모드로 구현한다
+window.suggestRule = async () => {
+  const txt = prompt('이 동네에 있어야 할 "현실 규칙"을 알려주세요!\n(예: "장날엔 어르신이 몰려와요" / "겨울엔 어묵이 두 배")\n채택되면 당신 전용 🧩모드로 만들어집니다');
+  if (!txt || txt.trim().length < 5) return;
+  const nick = prompt('닉네임 (모드에 이름이 새겨져요, 선택)') || '익명';
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/suggestions', {
+      method: 'POST',
+      headers: { ...SB_HDR, 'Content-Type': 'application/json', 'Content-Profile': 'bunsik', Prefer: 'return=minimal' },
+      body: JSON.stringify({ nickname: nick.slice(0, 20), text: txt.slice(0, 500), mods: ACTIVE_MODS.join(',') }),
+    });
+    if (r.ok) { log('💡 규칙 제안 접수 완료! 채택되면 🧩모드가 되어 모드 갤러리에 올라갑니다', 'y'); return; }
+  } catch (e) {}
+  const q = JSON.parse(localStorage.getItem('bunsik_suggests') || '[]');
+  q.push({ t: Date.now(), txt, nick });
+  localStorage.setItem('bunsik_suggests', JSON.stringify(q));
+  log('💡 제안이 로컬에 보관됐어요 (서버 준비 중) — 사라지지 않습니다', 'd');
+};
 
 // ═══════════════ 메인 루프 ═══════════════
 let last = Date.now();

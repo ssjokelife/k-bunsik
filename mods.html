@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🧩 K-분식집 모드 갤러리</title>
+<style>
+body { margin:0; background:#14161c; color:#dde; font-family:'Malgun Gothic',sans-serif; line-height:1.55; }
+.wrap { max-width:720px; margin:0 auto; padding:18px 14px 60px; }
+h1 { font-size:21px; color:#ffd08a; margin:10px 0 2px; }
+h2 { font-size:16px; color:#ecc94b; margin:26px 0 8px; border-bottom:1px solid #333; padding-bottom:4px; }
+.sub { color:#99a; font-size:13px; }
+.card { background:#1b1e27; border-radius:12px; padding:12px 14px; margin:10px 0; }
+.mod { border-left:4px solid #ecc94b; }
+.note { font-size:12.5px; color:#99a; }
+a { color:#8fb8e8; }
+.play { display:inline-block; background:#2a3040; padding:8px 16px; border-radius:8px; text-decoration:none; margin-top:6px; }
+.quote { color:#aab; font-style:italic; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>🧩 모드 갤러리 — 동네마다 다른 현실</h1>
+<div class="sub"><a href="index.html">🍢 게임</a> · <a href="sim.html">📊 리포트</a> · <a href="model.html">📐 명세서</a></div>
+
+<div class="card">
+이 시뮬레이터는 아직 부족합니다 — <b>당신이 아는 현실이 빠져 있을 수 있어요.</b><br><br>
+그래서 이렇게 합니다: 게임 안 <b>💡 규칙 제안</b> 버튼으로 "우리 동네엔 이런 게 있는데"를 알려주시면,
+전체 배포가 아니라 <b>당신 전용 🧩모드</b>로 구현해서 여기 갤러리에 올립니다.
+누구든 링크 하나로 그 동네의 현실을 플레이해볼 수 있고 — 좋은 규칙은 공식 버전에 편입됩니다.
+<br><br><span class="note">모드는 링크로 장착합니다: <b>index.html?mods=모드이름</b> (쉼표로 여러 개).
+🧩모드 기록은 순위표에 모드 표시와 함께 제출돼 공식 기록과 구분됩니다.</span>
+</div>
+
+<h2>🏪 공개 모드</h2>
+
+<div class="card mod">
+<b>🧺 장날 모드</b> <span class="note">· 데모 · 제작 2026-08-26</span><br>
+<span class="quote">"지방엔 5일장이 있잖아. 장날엔 어르신들이 몰려와."</span><br>
+끝자리 2·7일 = 장날. 장터 인파로 어르신·주민 손님 ×2.5 — 대신 노점 자릿세 30,000원이 나갑니다.
+장날 리듬에 맞춰 발주하는 재미가 생겨요.<br>
+<a class="play" href="index.html?mods=jangnal">🧺 이 동네에서 플레이</a>
+</div>
+
+<div class="card" style="border:1px dashed #444; text-align:center; color:#889">
+여기가 당신의 규칙이 올라올 자리입니다.<br>
+<span class="note">게임 안 💡 규칙 제안 → 채택되면 닉네임과 제안 원문이 함께 새겨집니다.</span>
+</div>
+
+<h2>❓ 자주 묻는 것</h2>
+<div class="card note">
+<b>Q. 아무 규칙이나 되나요?</b> — 현실에 있는 것이면 대부분 됩니다. 수치 조정부터 새로운 사건·손님·메뉴,
+새로운 시스템(어묵솥 같은 것)까지. 구현은 스튜디오의 AI(Claude)가 합니다.<br>
+<b>Q. 밸런스가 깨지면?</b> — 모드 기록은 공식 순위표와 구분 표시됩니다. 당신 동네의 순위표는 당신 동네의 것.<br>
+<b>Q. 좋은 모드는?</b> — AI 벤치마크(70시즌)를 돌려 현실성을 검증한 뒤 공식 버전에 편입될 수 있습니다.
+그러면 <a href="model.html">모델 명세서</a>와 <a href="sim.html">리포트</a>에 이름이 남아요.
+</div>
+
+<div style="text-align:center; margin-top:24px">
+<a class="play" href="index.html">🍢 기본 동네에서 플레이</a>
+</div>
+</div>
+</body>
+</html>
