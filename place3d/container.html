@@ -36,6 +36,7 @@
 <div id="hud">
   <h1>🚢 컨테이너 적재 시뮬</h1>
   <span style="flex:1"></span>
+  <button onclick="toggleDoor()">🚪 문</button>
   <button onclick="autoFill()">⚡ 자동적재</button>
   <button onclick="clearAll()">🗑 비우기</button>
   <button onclick="resetView()">🎥 시점</button>
@@ -87,18 +88,86 @@ const con = new THREE.Group();
 const floorPlate = new THREE.Mesh(new THREE.BoxGeometry(CON.L, 0.05, CON.W),
   new THREE.MeshStandardMaterial({ color: 0x3a4658, roughness: 0.8 }));
 floorPlate.position.set(0, 0.025, 0); floorPlate.receiveShadow = true; con.add(floorPlate);
-// 반투명 벽(뒷면·좌우) — 앞은 열어둠(보이게)
-const wallMat = new THREE.MeshStandardMaterial({ color: 0x5aa0e8, transparent: true, opacity: 0.14, side: THREE.DoubleSide });
-const back = new THREE.Mesh(new THREE.PlaneGeometry(CON.L, CON.H), wallMat);
-back.position.set(0, CON.H/2, -CON.W/2); con.add(back);
-const left = new THREE.Mesh(new THREE.PlaneGeometry(CON.W, CON.H), wallMat);
-left.rotation.y = Math.PI/2; left.position.set(-CON.L/2, CON.H/2, 0); con.add(left);
-const right = left.clone(); right.position.x = CON.L/2; con.add(right);
-// 뼈대 라인
+// 코러게이션(주름 강판) 벽 — 뒷면·좌우는 불투명 강판, 세로 주름
+const steelMat = new THREE.MeshStandardMaterial({ color: 0x2f5d92, roughness: 0.72, metalness: 0.28, side: THREE.DoubleSide });
+const steelDark = new THREE.MeshStandardMaterial({ color: 0x244a76, roughness: 0.7, metalness: 0.3 });
+function corrugatedWall(w, h) {   // 주름벽: 평판 + 세로 리브 (로컬 xy평면, 두께 z)
+  const g = new THREE.Group();
+  const skin = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.04), steelMat);
+  g.add(skin);
+  const ribs = Math.max(4, Math.round(w / 0.35));
+  for (let i = 0; i < ribs; i++) {
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(0.05, h - 0.08, 0.05), steelDark);
+    rib.position.set(-w/2 + (i + 0.5) * (w / ribs), 0, 0.03);
+    g.add(rib);
+  }
+  return g;
+}
+// 뒷면(불투명 강판)
+const back = corrugatedWall(CON.W, CON.H);
+back.rotation.y = Math.PI/2; back.position.set(-CON.L/2, CON.H/2, 0);
+back.traverse(o => o.castShadow = true); con.add(back);
+// 좌우(반투명 — 내부 박스 보이게)
+const glass = new THREE.MeshStandardMaterial({ color: 0x6ab0f0, transparent: true, opacity: 0.12, side: THREE.DoubleSide });
+const leftW = new THREE.Mesh(new THREE.PlaneGeometry(CON.L, CON.H), glass);
+leftW.position.set(0, CON.H/2, -CON.W/2); con.add(leftW);
+const rightW = leftW.clone(); rightW.position.z = CON.W/2; con.add(rightW);
+// 지붕(반투명)
+const roof = new THREE.Mesh(new THREE.PlaneGeometry(CON.L, CON.W), glass);
+roof.rotation.x = Math.PI/2; roof.position.set(0, CON.H, 0); con.add(roof);
+// 뼈대 라인 (컨테이너 코너 포스트)
 const edges = new THREE.LineSegments(
   new THREE.EdgesGeometry(new THREE.BoxGeometry(CON.L, CON.H, CON.W)),
   new THREE.LineBasicMaterial({ color: 0x8fc0ff }));
 edges.position.y = CON.H/2; con.add(edges);
+
+// ═══ 🚪 뒷문 — 양쪽 여닫이 2짝 (실제 20ft: 코러게이션 강판 + 수직 잠금바 + 손잡이 + 힌지) ═══
+const barMat = new THREE.MeshStandardMaterial({ color: 0x9aa4b0, roughness: 0.4, metalness: 0.7 });
+const doors = [];   // {pivot, sign}
+function makeDoor(sign) {   // sign=+1: z+쪽 힌지 문짝, -1: z-쪽 힌지 문짝
+  const pivot = new THREE.Group();
+  pivot.position.set(CON.L/2, 0, sign * CON.W/2);   // 앞면(+x)의 힌지 모서리
+  const panel = new THREE.Group();
+  const w = CON.W/2 - 0.015;
+  const cx = -sign * (w/2 + 0.01);   // 문짝 중심(힌지에서 안쪽으로)
+  // 강판 (주름)
+  const skin = new THREE.Mesh(new THREE.BoxGeometry(0.05, CON.H - 0.06, w), steelMat);
+  skin.position.set(0, CON.H/2, cx); skin.castShadow = true; panel.add(skin);
+  const ribs = 4;
+  for (let i = 0; i < ribs; i++) {
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(0.055, CON.H - 0.14, 0.05), steelDark);
+    rib.position.set(0.02, CON.H/2, -sign * (0.12 + i * (w - 0.24) / (ribs - 1)));
+    panel.add(rib);
+  }
+  // 수직 잠금바 2개 + 손잡이
+  for (let b = 0; b < 2; b++) {
+    const zoff = -sign * (w * 0.32 + b * w * 0.36);
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, CON.H - 0.18, 10), barMat);
+    rod.position.set(0.06, CON.H/2, zoff); rod.castShadow = true; panel.add(rod);
+    // 캠(위·아래)
+    for (const yy of [0.12, CON.H - 0.12]) {
+      const cam = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.06), barMat);
+      cam.position.set(0.07, yy, zoff); panel.add(cam);
+    }
+    // 손잡이
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.28, 0.05), barMat);
+    handle.position.set(0.11, CON.H * 0.5, zoff); panel.add(handle);
+  }
+  // 힌지 (문짝 바깥 모서리 = 힌지 위치, 위·아래)
+  for (const yy of [0.25, CON.H/2, CON.H - 0.25]) {
+    const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.16, 8), barMat);
+    hinge.position.set(0.02, yy, 0); panel.add(hinge);
+  }
+  pivot.add(panel);
+  con.add(pivot);
+  doors.push({ pivot, sign });
+  return pivot;
+}
+makeDoor(-1); makeDoor(+1);
+let doorOpen = 1, doorTarget = 1;   // 0 닫힘, 1 열림 (기본 열림 — 적재 중)
+window.toggleDoor = () => { doorTarget = doorTarget > 0.5 ? 0 : 1;
+  flash(doorTarget ? '🚪 문 열림 — 적재 가능' : '🚪 문 닫힘 — 봉인'); };
+
 scene.add(con);
 
 // 격자 (컨테이너 바닥 1m 셀)
@@ -187,7 +256,14 @@ function flash(msg){ const h=document.getElementById('hint'); h.textContent=msg;
 function resize(){ renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize);
 resize(); updateCam(); updateStats();
-renderer.setAnimationLoop(() => renderer.render(scene, camera));
+renderer.setAnimationLoop(() => {
+  // 🚪 문 여닫이 보간 (힌지 회전)
+  if (Math.abs(doorOpen - doorTarget) > 0.001) {
+    doorOpen += (doorTarget - doorOpen) * 0.12;
+    for (const d of doors) d.pivot.rotation.y = d.sign * doorOpen * Math.PI * 0.62;
+  }
+  renderer.render(scene, camera);
+});
 </script>
 </body>
 </html>
