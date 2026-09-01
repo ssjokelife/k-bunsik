@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>🚢 컨테이너 적재 게임 — 방과후 스튜디오</title>
+<style>
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#0e1015;
+    font-family:'Malgun Gothic',sans-serif; color:#dde; touch-action:none; }
+  #c { display:block; width:100%; height:100%; }
+  #top { position:fixed; top:0; left:0; right:0; padding:8px 12px;
+    display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+    background:linear-gradient(rgba(14,16,21,.92), transparent); z-index:5; pointer-events:none; }
+  #top > * { pointer-events:auto; }
+  h1 { font-size:14px; margin:0; color:#ffd08a; }
+  button { background:#242a36; color:#dde; border:1px solid #3a4356; border-radius:9px;
+    padding:8px 11px; font-size:13px; font-family:inherit; cursor:pointer; }
+  button:active { transform:translateY(1px); }
+  button.hot { background:#5aa0e8; color:#fff; border:0; }
+  button.go { background:#e8734f; color:#fff; border:0; font-weight:bold; }
+  #score { position:fixed; top:40px; left:10px; font-size:12px; line-height:1.55;
+    background:rgba(0,0,0,.5); border-radius:10px; padding:7px 11px; z-index:5; }
+  #score b { color:#ecc94b; }
+  #next { position:fixed; bottom:56px; left:0; right:0; display:flex; gap:6px; justify-content:center;
+    flex-wrap:wrap; padding:0 8px; z-index:5; }
+  #next .card { background:#1b1e27; border:2px solid #3a4356; border-radius:9px; padding:5px 8px;
+    font-size:12px; min-width:52px; text-align:center; }
+  #next .card.cur { border-color:#ffd08a; background:#2a2418; }
+  #next .card.done { opacity:.35; }
+  #bottom { position:fixed; bottom:0; left:0; right:0; padding:9px; display:flex; gap:8px;
+    justify-content:center; background:linear-gradient(transparent, rgba(14,16,21,.92)); z-index:5; }
+  #hint { position:fixed; bottom:98px; left:50%; transform:translateX(-50%);
+    background:rgba(0,0,0,.6); border-radius:10px; padding:5px 13px; font-size:12px;
+    color:#cdd8ee; z-index:5; white-space:nowrap; max-width:94vw; overflow:hidden; text-overflow:ellipsis; }
+  #modal { position:fixed; inset:0; background:rgba(0,0,0,.82); display:none;
+    align-items:center; justify-content:center; z-index:20; }
+  #modal .box { background:#f7f1e3; color:#333; border-radius:14px; padding:22px 26px;
+    width:86%; max-width:380px; font-size:15px; line-height:1.8; text-align:center; }
+  #modal h2 { color:#c05a46; margin-top:0; } #modal b { color:#c05a46; }
+  #modal button { width:100%; background:#e8734f; color:#fff; border:0; margin-top:12px; padding:12px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="top">
+  <h1>🚢 컨테이너 적재 게임</h1>
+  <span style="flex:1"></span>
+  <button onclick="rotateCargo()">↻ 회전</button>
+  <button onclick="undo()">↩ 취소</button>
+  <button onclick="resetView()">🎥</button>
+  <button class="go" onclick="depart()">⚓ 출항</button>
+</div>
+<div id="score"></div>
+<div id="next"></div>
+<div id="hint">화물을 컨테이너 바닥에 탭해서 놓으세요 · 빈 곳 드래그로 시점 회전</div>
+<div id="bottom"></div>
+<div id="modal"><div class="box" id="modalBody"></div></div>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ═══ 규격 (셀 = 1m, ISO 20ft 근사) ═══
+const CON = { L: 5.90, W: 2.35, H: 2.39 };
+const CW = 5, CD = 2, CH = 2;   // 셀 격자 5×2×2 = 20셀
+const CELL = 1.0;
+const OX = -CW/2, OZ = -CD/2;   // 셀→월드 오프셋 (컨테이너 중앙정렬, 셀은 1m라 격자와 컨테이너 살짝 다름 무시)
+
+// ═══ 화물 종류 ═══
+const TYPES = {
+  box:   { w:1,d:1,h:1, wt:1, color:0x5aa0e8, name:'일반',  icon:'📦' },
+  long:  { w:2,d:1,h:1, wt:2, color:0x7fd18a, name:'대형',  icon:'📗' },
+  tall:  { w:1,d:1,h:2, wt:2, color:0xb07fd1, name:'장척',  icon:'🗼' },
+  glass: { w:1,d:1,h:1, wt:1, color:0xecc94b, name:'유리',  icon:'⚠️', fragile:true },
+  heavy: { w:1,d:1,h:1, wt:4, color:0xe0705a, name:'중량',  icon:'⬛', heavy:true },
+};
+// 미션 화물 큐 (총 CBM > 컨테이너 → 다 못 넣음: "최대한 많이"의 긴장)
+const MISSION = ['heavy','heavy','glass','glass','box','long','tall','box','box','long','glass','box'];
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x141820);
+scene.fog = new THREE.Fog(0x141820, 18, 44);
+const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 200);
+
+scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x33322c, 0.95));
+const sun = new THREE.DirectionalLight(0xfff0e0, 1.05);
+sun.position.set(5, 12, 6); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left:-6, right:6, top:6, bottom:-6 });
+scene.add(sun);
+
+// 바다 (배 느낌)
+const sea = new THREE.Mesh(new THREE.PlaneGeometry(60, 60),
+  new THREE.MeshStandardMaterial({ color: 0x1a3a4a, roughness: 0.4, metalness: 0.3 }));
+sea.rotation.x = -Math.PI/2; sea.position.y = -0.4; sea.receiveShadow = true; scene.add(sea);
+
+// ═══ 컨테이너 (con 그룹 = 롤링 축) ═══
+const con = new THREE.Group(); scene.add(con);
+const steel = new THREE.MeshStandardMaterial({ color: 0x2f5d92, roughness: 0.72, metalness: 0.28, side: THREE.DoubleSide });
+const steelD = new THREE.MeshStandardMaterial({ color: 0x244a76, roughness: 0.7, metalness: 0.3 });
+const floorPlate = new THREE.Mesh(new THREE.BoxGeometry(CON.L, 0.06, CON.W), steel);
+floorPlate.position.y = 0.03; floorPlate.receiveShadow = true; con.add(floorPlate);
+const glassMat = new THREE.MeshStandardMaterial({ color: 0x6ab0f0, transparent: true, opacity: 0.1, side: THREE.DoubleSide });
+function wall(w,h,rotY,x,z){ const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),glassMat); m.rotation.y=rotY; m.position.set(x,h/2,z); con.add(m); }
+wall(CON.L,CON.H,0,0,-CON.W/2); wall(CON.L,CON.H,0,0,CON.W/2);
+const backW = new THREE.Mesh(new THREE.BoxGeometry(0.05,CON.H,CON.W), steel);
+backW.position.set(-CON.L/2,CON.H/2,0); backW.castShadow=true; con.add(backW);
+const roof = new THREE.Mesh(new THREE.PlaneGeometry(CON.L,CON.W),glassMat); roof.rotation.x=Math.PI/2; roof.position.y=CON.H; con.add(roof);
+const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(CON.L,CON.H,CON.W)),
+  new THREE.LineBasicMaterial({ color: 0x8fc0ff })); edges.position.y=CON.H/2; con.add(edges);
+// 문 2짝
+const bar = new THREE.MeshStandardMaterial({ color:0x9aa4b0, roughness:0.4, metalness:0.7 });
+const doors=[];
+function makeDoor(sign){ const p=new THREE.Group(); p.position.set(CON.L/2,0,sign*CON.W/2);
+  const w=CON.W/2-0.02, cx=-sign*(w/2+0.01);
+  const s=new THREE.Mesh(new THREE.BoxGeometry(0.05,CON.H-0.06,w),steel); s.position.set(0,CON.H/2,cx); s.castShadow=true; p.add(s);
+  for(let i=0;i<4;i++){ const r=new THREE.Mesh(new THREE.BoxGeometry(0.055,CON.H-0.14,0.05),steelD); r.position.set(0.02,CON.H/2,-sign*(0.12+i*(w-0.24)/3)); p.add(r); }
+  for(let b=0;b<2;b++){ const z=-sign*(w*0.32+b*w*0.36); const rod=new THREE.Mesh(new THREE.CylinderGeometry(0.028,0.028,CON.H-0.18,10),bar); rod.position.set(0.06,CON.H/2,z); p.add(rod);
+    const h=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.28,0.05),bar); h.position.set(0.11,CON.H*0.5,z); p.add(h); }
+  con.add(p); doors.push({p,sign}); }
+makeDoor(-1); makeDoor(1);
+let doorOpen=1, doorTarget=1;
+
+// ═══ 상태 ═══
+const occ = {};   // "i,j,k" -> cargoId
+const placed = [];   // {id, type, i,j,k, w,d,h, mesh, damaged}
+let queueIdx = 0, rot = 0;   // rot: 0 or 1 (90도)
+let departed = false;
+
+const key = (i,j,k)=>`${i},${j},${k}`;
+function footprint(type, rot){ const t=TYPES[type]; return rot? {w:t.d,d:t.w,h:t.h} : {w:t.w,d:t.d,h:t.h}; }
+
+function canPlace(type,rot,i,j){
+  const f=footprint(type,rot);
+  if(i<0||j<0||i+f.w>CW||j+f.d>CD) return null;
+  // 가장 낮은 지지 높이 찾기
+  for(let k=0;k<=CH-f.h;k++){
+    let ok=true, supported=(k===0);
+    for(let di=0;di<f.w;di++)for(let dj=0;dj<f.d;dj++){
+      for(let dk=0;dk<f.h;dk++) if(occ[key(i+di,j+dj,k+dk)]!==undefined) ok=false;
+      if(k>0 && occ[key(i+di,j+dj,k-1)]!==undefined) supported=true;
+    }
+    if(ok && supported) return {i,j,k,...f};
+  }
+  return null;
+}
+function place(type,rot,i,j){
+  const spot=canPlace(type,rot,i,j); if(!spot) return false;
+  const t=TYPES[type], id=placed.length;
+  const geo=new THREE.BoxGeometry(spot.w*CELL*0.96, spot.h*CELL*0.96, spot.d*CELL*0.96);
+  const mat=new THREE.MeshStandardMaterial({ color:t.color, roughness:0.55 });
+  const mesh=new THREE.Mesh(geo,mat); mesh.castShadow=true; mesh.receiveShadow=true;
+  mesh.position.set(
+    OX*CELL + (spot.i+spot.w/2)*CELL,
+    0.06 + (spot.k+spot.h/2)*CELL,
+    OZ*CELL + (spot.j+spot.d/2)*CELL);
+  con.add(mesh);
+  // 라벨(fragile/heavy 아이콘 스프라이트)
+  if(t.fragile||t.heavy){ const s=makeLabel(t.icon); s.position.copy(mesh.position); s.position.y+=spot.h*0.5+0.15; con.add(s); mesh.userData.label=s; }
+  for(let di=0;di<spot.w;di++)for(let dj=0;dj<spot.d;dj++)for(let dk=0;dk<spot.h;dk++) occ[key(spot.i+di,spot.j+dj,spot.k+dk)]=id;
+  placed.push({id,type,...spot,mesh,damaged:false});
+  return true;
+}
+function makeLabel(txt){
+  const cv=document.createElement('canvas'); cv.width=64;cv.height=64;
+  const cx=cv.getContext('2d'); cx.font='44px sans-serif'; cx.textAlign='center'; cx.fillText(txt,32,46);
+  const tx=new THREE.CanvasTexture(cv); const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tx,depthTest:false}));
+  sp.scale.set(0.5,0.5,0.5); return sp;
+}
+
+window.rotateCargo=()=>{ rot^=1; flash('회전: '+(rot?'세로':'가로')); };
+window.undo=()=>{
+  if(!placed.length||departed) return;
+  const p=placed.pop(); con.remove(p.mesh); if(p.mesh.userData.label) con.remove(p.mesh.userData.label);
+  for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++)for(let dk=0;dk<p.h;dk++) delete occ[key(p.i+di,p.j+dj,p.k+dk)];
+  queueIdx--; updateHUD();
+};
+
+// ═══ 출항 & 손상 판정 ═══
+window.depart=()=>{
+  if(departed) return;
+  if(!placed.length){ flash('화물을 먼저 실으세요!'); return; }
+  departed=true; doorTarget=0;   // 문 닫기
+  flash('⚓ 출항! 항해 중…');
+  setTimeout(sailAndJudge, 1400);
+};
+let rolling=0;
+function sailAndJudge(){
+  rolling=3.2;   // 3.2초 롤링
+  setTimeout(()=>{
+    // ── 손상 판정 ──
+    let dmg=0;
+    const cbmUsed = placed.reduce((a,p)=>a+p.w*p.d*p.h,0);
+    const fillRate = cbmUsed / (CW*CD*CH);
+    for(const p of placed){
+      const t=TYPES[p.type]; let hit=false;
+      // 1) 유리 위에 무엇이든 실림 → 눌림
+      if(t.fragile){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++) if(occ[key(p.i+di,p.j+dj,p.k+p.h)]!==undefined) hit=true; }
+      // 2) 중량이 바닥이 아닌 곳(k>0)에 → 아래 화물 짓눌림
+      if(t.heavy && p.k>0){ hit=true; const below=occ[key(p.i,p.j,p.k-1)]; if(below!==undefined) placed[below].damaged=true; }
+      // 3) 적재율 낮음 → 흔들림: 위·옆이 다 비어 안 끼인 화물 손상 확률
+      if(fillRate<0.55){
+        const topEmpty=occ[key(p.i,p.j,p.k+p.h)]===undefined && p.k+p.h<CH;
+        const sideEmpty=(p.j===0&&occ[key(p.i,p.j+p.d,p.k)]===undefined&&p.j+p.d<CD);
+        if(topEmpty && p.k+p.h<CH && Math.random()<0.45) hit=true;
+      }
+      if(hit) p.damaged=true;
+    }
+    placed.filter(p=>p.damaged).forEach(p=>{ p.mesh.material.color.setHex(0xd03030); p.mesh.material.emissive.setHex(0x551010); });
+    doorTarget=1;   // 문 열어서 결과 공개
+    setTimeout(()=>showResult(cbmUsed), 1000);
+  }, 3400);
+}
+function showResult(cbmUsed){
+  const dmgList=placed.filter(p=>p.damaged);
+  const dmgCbm=dmgList.reduce((a,p)=>a+p.w*p.d*p.h,0);
+  const loaded=placed.length, total=MISSION.length;
+  const base=cbmUsed*100;
+  const bonus=(queueIdx>=MISSION.length)?500:0;
+  const penalty=dmgCbm*220;
+  const score=Math.max(0, base+bonus-penalty);
+  document.getElementById('modalBody').innerHTML=
+    `<h2>📋 하역 결과</h2>`+
+    `적재: <b>${loaded}/${total}</b>개 · <b>${cbmUsed} CBM</b> (적재율 ${Math.round(cbmUsed/20*100)}%)<br>`+
+    `${dmgList.length? `💥 손상: <b>${dmgList.length}개</b> (${dmgCbm} CBM)`:'✅ 무손상 완벽 배송!'}<br><br>`+
+    `<div style="font-size:13px;color:#666">적재 +${base} ${bonus?`· 완주 +${bonus} `:''}${penalty?`· 손상 -${penalty}`:''}</div>`+
+    `<div style="font-size:26px;margin-top:6px">최종 <b>${score}</b>점</div>`+
+    (dmgList.length? `<div style="font-size:12px;color:#999;margin-top:6px">💡 유리(⚠️)는 위에 아무것도 얹지 말고, 중량(⬛)은 바닥에. 빈틈이 많으면 항해 중 흔들려요.</div>`:'')+
+    `<button onclick="location.reload()">🔄 다시 도전</button>`;
+  document.getElementById('modal').style.display='flex';
+}
+
+// ═══ 입력 (탭 배치 / 드래그 시점) ═══
+let camYaw=0.9, camPitch=0.72, camDist=11;
+function updateCam(){ camPitch=Math.max(0.2,Math.min(1.4,camPitch)); camDist=Math.max(5,Math.min(22,camDist));
+  camera.position.set(Math.sin(camYaw)*Math.cos(camPitch)*camDist, Math.sin(camPitch)*camDist+0.5, Math.cos(camYaw)*Math.cos(camPitch)*camDist);
+  camera.lookAt(0,CON.H/2,0); }
+window.resetView=()=>{ camYaw=0.9; camPitch=0.72; camDist=11; updateCam(); };
+const ray=new THREE.Raycaster(), ndc=new THREE.Vector2();
+let mode=null,lastX=0,lastY=0,dX=0,dY=0,moved=false;
+function onDown(x,y){ dX=x;dY=y;lastX=x;lastY=y;moved=false;mode='maybe'; }
+function onMove(x,y){ if(!mode)return; if(Math.abs(x-dX)+Math.abs(y-dY)>5){moved=true;mode='orbit';}
+  if(mode==='orbit'){ camYaw-=(x-lastX)*0.006; camPitch+=(y-lastY)*0.006; updateCam(); } lastX=x;lastY=y; }
+function onUp(x,y){ if(mode==='maybe'&&!moved) tapPlace(x,y); mode=null; }
+function tapPlace(x,y){
+  if(departed||queueIdx>=MISSION.length) return;
+  const r=canvas.getBoundingClientRect();
+  ndc.x=((x-r.left)/r.width)*2-1; ndc.y=-((y-r.top)/r.height)*2+1;
+  ray.setFromCamera(ndc,camera);
+  const hit=ray.intersectObjects([floorPlate,...placed.map(p=>p.mesh)],false)[0];
+  if(!hit) return;
+  const px=hit.point.x, pz=hit.point.z;
+  const i=Math.floor(px-OX*CELL), j=Math.floor(pz-OZ*CELL);
+  const type=MISSION[queueIdx];
+  if(place(type,rot,i,j)){ queueIdx++; updateHUD(); }
+  else flash('여기엔 안 들어가요 (공간 부족/지지 없음)');
+}
+canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);onDown(e.clientX,e.clientY);});
+canvas.addEventListener('pointermove',e=>onMove(e.clientX,e.clientY));
+canvas.addEventListener('pointerup',e=>onUp(e.clientX,e.clientY));
+canvas.addEventListener('wheel',e=>{camDist+=e.deltaY*0.01;updateCam();},{passive:true});
+let pinch=0;
+canvas.addEventListener('touchstart',e=>{if(e.touches.length===2)pinch=pd(e);},{passive:true});
+canvas.addEventListener('touchmove',e=>{if(e.touches.length===2){const d=pd(e);camDist*=pinch/d;pinch=d;updateCam();}},{passive:true});
+function pd(e){return Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}
+
+// ═══ HUD ═══
+function updateHUD(){
+  const cbm=placed.reduce((a,p)=>a+p.w*p.d*p.h,0);
+  document.getElementById('score').innerHTML=`📦 적재 <b>${placed.length}/${MISSION.length}</b> · <b>${cbm}/20 CBM</b><br>남은 화물: ${MISSION.length-queueIdx}개`;
+  // 다음 화물 큐
+  document.getElementById('next').innerHTML=MISSION.map((t,idx)=>{
+    const T=TYPES[t]; const cls=idx<queueIdx?'done':idx===queueIdx?'cur':'';
+    return `<div class="card ${cls}">${T.icon}<br>${T.name}</div>`;
+  }).slice(Math.max(0,queueIdx-1), queueIdx+4).join('');
+  const cur=MISSION[queueIdx];
+  document.getElementById('bottom').innerHTML = cur
+    ? `<button class="hot">다음: ${TYPES[cur].icon} ${TYPES[cur].name} <span style="opacity:.7">(${footprint(cur,rot).w}×${footprint(cur,rot).d}×${TYPES[cur].h})</span> — 바닥 탭!</button>`
+    : `<button class="go" onclick="depart()">⚓ 다 실었다! 출항</button>`;
+}
+let ht; function flash(m){ const h=document.getElementById('hint'); h.textContent=m; clearTimeout(ht); ht=setTimeout(()=>h.textContent='화물을 컨테이너 바닥에 탭해서 놓으세요 · 빈 곳 드래그로 시점 회전',2400); }
+
+function resize(){ renderer.setSize(innerWidth,innerHeight); camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); }
+addEventListener('resize',resize);
+resize(); updateCam(); updateHUD();
+let t=0;
+renderer.setAnimationLoop(()=>{
+  // 문
+  if(Math.abs(doorOpen-doorTarget)>0.001){ doorOpen+=(doorTarget-doorOpen)*0.12; for(const d of doors) d.p.rotation.y=-d.sign*doorOpen*Math.PI*0.82; }
+  // 항해 롤링
+  if(rolling>0){ rolling-=1/60; t+=0.08; con.rotation.z=Math.sin(t)*0.09; con.rotation.x=Math.sin(t*0.7)*0.05; if(rolling<=0){con.rotation.z=0;con.rotation.x=0;} }
+  renderer.render(scene,camera);
+});
+</script>
+</body>
+</html>
