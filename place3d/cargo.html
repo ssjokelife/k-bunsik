@@ -48,6 +48,19 @@
   #iinfo b { color:#ffd08a; font-size:16px; }
   #inspector .close { background:#3a4356; color:#fff; border:0; border-radius:9px; padding:10px 30px; margin-top:12px; font-size:14px; }
   #inspector .tip { color:#889; font-size:11.5px; margin-top:8px; }
+  #stageSelect { position:fixed; inset:0; background:linear-gradient(#141820,#1a2230); z-index:30;
+    display:none; flex-direction:column; overflow-y:auto; padding:22px 14px; }
+  #stageSelect h2 { color:#ffd08a; text-align:center; margin:6px 0 2px; }
+  #stageSelect .cash { text-align:center; color:#9de89a; font-size:14px; margin-bottom:16px; }
+  #stageSelect .cash b { color:#ffd08a; font-size:17px; }
+  .stg { background:#1b1e27; border:2px solid #2a3140; border-radius:12px; padding:12px 15px;
+    margin:8px auto; max-width:450px; width:100%; cursor:pointer; }
+  .stg.clr { border-color:#3a7a4a; } .stg.cur { border-color:#ecc94b; box-shadow:0 0 14px rgba(236,201,75,.3); }
+  .stg.lock { opacity:.4; cursor:default; }
+  .stg .sh { font-size:15px; font-weight:bold; color:#dde; }
+  .stg .sc { font-size:12px; color:#8fb8e8; font-weight:normal; }
+  .stg .sw { font-size:12.5px; color:#aab; margin-top:3px; }
+  .stg .sf { font-size:12px; color:#889; margin-top:4px; }
 </style>
 </head>
 <body>
@@ -55,7 +68,7 @@
 <div id="top">
   <h1>🚢 컨테이너 적재</h1>
   <span style="flex:1"></span>
-  <button onclick="cycleContainer()" id="conBtn">🟦 20ft</button>
+  <button onclick="backToStages()">🗂 스케줄</button>
   <button onclick="rotateCargo()">↻ 회전</button>
   <button onclick="undo()">↩ 취소</button>
   <button onclick="inspectSel()">🔍 보기</button>
@@ -68,6 +81,11 @@
 <div id="hint">바닥 탭=놓기 · 화물 탭=선택 · 화물 드래그=이동 · ↻회전 · ↩제거</div>
 <div id="bottom"></div>
 <div id="modal"><div class="box" id="modalBody"></div></div>
+<div id="stageSelect"><div style="max-width:470px;margin:0 auto;width:100%">
+  <h2>🚢 방과후 포워딩</h2>
+  <div class="cash">누적 수익 <b id="ssCash">0</b>만원 · 작은 포워더의 성장기</div>
+  <div id="stageList"></div>
+</div></div>
 <div id="inspector"><div class="ibox">
   <canvas id="ic"></canvas>
   <div id="iinfo"></div>
@@ -121,7 +139,31 @@ const MANIFESTS = {
   '20rf': ['produce','produce','produce','produce','frozen','frozen','frozen','frozen','frozen','frozen','frozen','carton','carton','produce','frozen','carton'],
 };
 let INV = [], nextId = 0;
-function loadManifest(){ INV = MANIFESTS[curCon].map(type=>({type, placed:false})); }
+function loadManifest(){ INV = (curStage? curStage.cargo : MANIFESTS[curCon]).map(type=>({type, placed:false})); }
+
+// ═══ 📅 스테이지 (작은 포워더 선적 스케줄) ═══
+const STAGES = [
+  { when:'9월 3주차 (수) 출항', client:'한빛무역', con:'20gp', fee:150, goal:{maxDmg:0},
+    brief:'첫 의뢰입니다! 20ft 컨테이너 FCL — 이 화물을 <b>전부</b> 싣고 <b>무손상</b>으로 보내주세요. (벽·다른 화물에 붙여 쌓아야 흔들림이 없어요)',
+    cargo:['carton','carton','carton','carton','pallet','pallet','crate','drum','drum','bigbag','glass'] },
+  { when:'9월 3주차 (토) 출항', client:'대양상사', con:'40gp', fee:300, goal:{maxDmg:1},
+    brief:'40ft FCL 큰 건입니다. 화물을 전부 싣고 손상 1개 이내로.',
+    cargo:['machine','ibc','pallet','pallet','crate','pipe','bigbag','bigbag','glass','glass','drum','drum','drum','carton','carton','carton','carton'] },
+  { when:'9월 4주차 (화) 출항', client:'신선물류', con:'20rf', fee:280, goal:{maxDmg:0},
+    brief:'❄️ 냉동 컨테이너 특수 건! 청과·냉동식품을 전부 싣고 <b>무손상</b>으로. 냉동은 실수가 안 됩니다.',
+    cargo:['produce','produce','frozen','frozen','frozen','frozen','carton','carton','frozen'] },
+  { when:'9월 4주차 (금) 출항', client:'글로벌테크', con:'40hc', fee:420, goal:{maxDmg:1},
+    brief:'40ft 하이큐브 대량 선적. 천장이 높으니 위로도 쌓으세요 — 전량 적재, 손상 1개 이내.',
+    cargo:['machine','ibc','ibc','pallet','pallet','crate','crate','pipe','pipe','bigbag','bigbag','glass','glass','glass','drum','drum','carton','carton','carton','carton'] },
+  { when:'10월 1주차 (수) 출항', client:'정밀산업', con:'20gp', fee:400, goal:{maxDmg:0},
+    brief:'까다로운 건입니다 — 깨지기 쉬운 판유리와 중량물이 많아요. 배치 실력이 시험대. 전량·무손상!',
+    cargo:['glass','glass','glass','machine','ibc','pipe','drum','drum','carton','carton','bigbag'] },
+  { when:'10월 1주차 (토) 출항', client:'한바다해운', con:'40hc', fee:650, goal:{maxDmg:1},
+    brief:'🏆 최종 의뢰! 대형 혼합 화물을 하이큐브에 전부. 포워더의 진짜 실력을 보여줄 때입니다.',
+    cargo:['machine','machine','ibc','ibc','pallet','pallet','pallet','crate','crate','pipe','pipe','bigbag','bigbag','glass','glass','glass','drum','drum','drum','carton','carton','carton','carton','carton'] },
+];
+let progress; try{ progress=JSON.parse(localStorage.getItem('cargo_progress')||'{"cleared":0,"cash":0}'); }catch(e){ progress={cleared:0,cash:0}; }
+let curStage=null, curStageIdx=-1;
 
 // ═══ 화물 3D 형상 빌더 (원점 중심, w×h×d 셀) ═══
 function mkMesh(geo,color,rough=0.6,metal=0.1,opts={}){ const m=new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal,...opts}); return new THREE.Mesh(geo,m); }
@@ -237,6 +279,38 @@ window.switchContainer=(id)=>{
 };
 window.cycleContainer=()=>{ const ids=Object.keys(CONTAINERS); switchContainer(ids[(ids.indexOf(curCon)+1)%ids.length]); };
 
+// ═══ 📅 스테이지 진행 ═══
+window.renderStageSelect=()=>{
+  document.getElementById('modal').style.display='none';
+  document.getElementById('inspector').style.display='none';
+  document.getElementById('ssCash').textContent=progress.cash;
+  document.getElementById('stageList').innerHTML=STAGES.map((s,i)=>{
+    const cleared=i<progress.cleared, cur=i===progress.cleared, C=CONTAINERS[s.con];
+    return `<div class="stg ${cleared?'clr':cur?'cur':'lock'}" ${i<=progress.cleared?`onclick="startStage(${i})"`:''}>
+      <div class="sh">${cleared?'✅':cur?'▶':'🔒'} Stage ${i+1} <span class="sc">${C.icon} ${C.name} FCL</span></div>
+      <div class="sw">${s.when} · ${s.client}</div>
+      <div class="sf">🎯 화물 ${s.cargo.length}개 전량 · ${s.goal.maxDmg===0?'무손상':'손상 '+s.goal.maxDmg+' 이내'} · 수수료 ${s.fee}만원</div></div>`;
+  }).join('');
+  document.getElementById('stageSelect').style.display='flex';
+};
+window.backToStages=()=>{ if(replayTimer) return; renderStageSelect(); };
+window.startStage=(i)=>{
+  if(i>progress.cleared) return;
+  curStageIdx=i; curStage=STAGES[i];
+  applyContainerSpec(curStage.con); buildContainer();
+  document.getElementById('stageSelect').style.display='none';
+  clearAll(); resetView();
+  const C=CONTAINERS[curStage.con];
+  document.getElementById('modalBody').innerHTML=
+    `<h2>📋 Stage ${i+1} — ${curStage.client}</h2>`+
+    `<div style="font-size:13px;color:#666">${curStage.when} · ${C.icon} ${C.name} FCL</div><br>`+
+    `${curStage.brief}<br><br>`+
+    `<div style="font-size:13px">🎯 목표: 화물 <b>${curStage.cargo.length}개 전량 적재</b> · ${curStage.goal.maxDmg===0?'<b>무손상</b>':'손상 '+curStage.goal.maxDmg+'개 이내'}<br>💰 성공 시 수수료 <b>${curStage.fee}만원</b></div>`+
+    `<button onclick="document.getElementById('modal').style.display='none'">🏗 작업 시작!</button>`;
+  document.getElementById('modal').style.display='flex';
+};
+window.retryStage=()=>{ startStage(curStageIdx); };
+
 // ═══ 상태 ═══
 const occ = {};   // "i,j,k" -> cargoId
 const placed = [];   // {id, type, i,j,k, w,d,h, mesh, damaged, invIdx}
@@ -295,6 +369,21 @@ function setOcc(p, val){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++)for(l
 function meshPos(p){ return new THREE.Vector3(OX+(p.i+p.w/2)*CELLX, 0.06+(p.k+p.h/2)*CELLY, OZ+(p.j+p.d/2)*CELLZ); }
 function moveItem(p,i,j,k){ p.i=i;p.j=j;p.k=k; const pos=meshPos(p); p.mesh.position.copy(pos); if(p.mesh.userData.label){ p.mesh.userData.label.position.copy(pos); p.mesh.userData.label.position.y+=p.h*0.5+0.15; } setOcc(p,p.id); }
 function highlight(p,on){ paintCargo(p.mesh, null, on?0x224466:0x000000); }
+// 화물이 몇 면 고정됐나 (벽 또는 이웃 화물) — 2면 이상이면 안 흔들림
+function sideBlocked(p){
+  let s=0;
+  for(const [di,dj] of [[-1,0],[1,0],[0,-1],[0,1]]){
+    if(di<0&&p.i===0){s++;continue;} if(di>0&&p.i+p.w>=CW){s++;continue;}
+    if(dj<0&&p.j===0){s++;continue;} if(dj>0&&p.j+p.d>=CD){s++;continue;}
+    let blocked=false;
+    for(let k=0;k<p.h && !blocked;k++){
+      if(di!==0){ const ci=di<0?p.i-1:p.i+p.w; for(let a=0;a<p.d;a++) if(occ[key(ci,p.j+a,p.k+k)]!==undefined){blocked=true;break;} }
+      else { const cj=dj<0?p.j-1:p.j+p.d; for(let a=0;a<p.w;a++) if(occ[key(p.i+a,cj,p.k+k)]!==undefined){blocked=true;break;} }
+    }
+    if(blocked)s++;
+  }
+  return s;
+}
 function makeLabel(txt){
   const cv=document.createElement('canvas'); cv.width=64;cv.height=64;
   const cx=cv.getContext('2d'); cx.font='44px sans-serif'; cx.textAlign='center'; cx.fillText(txt,32,46);
@@ -345,20 +434,18 @@ function sailAndJudge(){
   rolling=3.2;   // 3.2초 롤링
   setTimeout(()=>{
     // ── 손상 판정 ──
-    let dmg=0;
     const cbmUsed = placed.reduce((a,p)=>a+p.w*p.d*p.h,0);
-    const fillRate = cbmUsed / (CW*CD*CH);
     for(const p of placed){
       const t=TYPES[p.type]; let hit=false;
       // 1) 유리 위에 무엇이든 실림 → 눌림
       if(t.fragile){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++) if(occ[key(p.i+di,p.j+dj,p.k+p.h)]!==undefined) hit=true; }
       // 2) 중량이 바닥이 아닌 곳(k>0)에 → 아래 화물 짓눌림
       if(t.heavy && p.k>0){ hit=true; const bId=occ[key(p.i,p.j,p.k-1)]; const below=bId!==undefined?itemById(bId):null; if(below) below.damaged=true; }
-      // 3) 적재율 낮음 → 흔들림: 위·옆이 다 비어 안 끼인 화물 손상 확률
-      if(fillRate<0.55){
-        const topEmpty=occ[key(p.i,p.j,p.k+p.h)]===undefined && p.k+p.h<CH;
-        const sideEmpty=(p.j===0&&occ[key(p.i,p.j+p.d,p.k)]===undefined&&p.j+p.d<CD);
-        if(topEmpty && p.k+p.h<CH && Math.random()<0.45) hit=true;
+      // 3) 고정 안 됨 → 흔들림: 위가 열려 있고 사방 지지가 부족한 화물만 (벽·이웃에 붙이면 안전)
+      if(!hit && !t.heavy){
+        let topOpen = p.k+p.h<CH;
+        if(topOpen){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++) if(occ[key(p.i+di,p.j+dj,p.k+p.h)]!==undefined){ topOpen=false; break; } }
+        if(topOpen && sideBlocked(p)<2 && Math.random()<0.55) hit=true;
       }
       if(hit) p.damaged=true;
     }
@@ -371,19 +458,32 @@ function showResult(cbmUsed){
   const dmgList=placed.filter(p=>p.damaged);
   const dmgCbm=dmgList.reduce((a,p)=>a+p.w*p.d*p.h,0);
   const loaded=placed.length, total=INV.length;
-  const base=cbmUsed*100;
-  const bonus=(nextUnplaced()<0)?500:0;   // 전량 적재 보너스
-  const penalty=dmgCbm*220;
+  const rate=cbmUsed/(CW*CD*CH);
+  const mB=document.getElementById('modalBody');
+  if(curStage){   // 📅 스테이지 판정 — 전량 적재 + 손상 제한
+    const g=curStage.goal;
+    const allLoaded = placed.length===INV.length;
+    const pass = allLoaded && dmgList.length<=g.maxDmg;
+    let earned=0;
+    if(pass && curStageIdx===progress.cleared){ progress.cleared++; progress.cash+=curStage.fee; earned=curStage.fee;
+      try{ localStorage.setItem('cargo_progress',JSON.stringify(progress)); }catch(e){} }
+    const last = curStageIdx+1>=STAGES.length;
+    mB.innerHTML=
+      `<h2>${pass?'✅ 선적 완료!':'❌ 목표 미달'}</h2>`+
+      `적재 <b>${placed.length}/${INV.length}개</b> · 손상 <b>${dmgList.length}개</b> (허용 ${g.maxDmg}) · 🏗 핸들링 ${handCost}<br><br>`+
+      (pass
+        ? `💰 수수료 <b style="color:#c05a46">+${curStage.fee}만원</b>${earned?' 획득!':''}<br>누적 수익 <b>${progress.cash}만원</b><br><br>`+
+          (last?`<div style="font-size:17px;color:#c05a46">🏆 모든 선적 완수 — 포워더 성공!</div><br>`:`<button onclick="startStage(${curStageIdx+1})">▶ 다음 스테이지</button>`)
+        : `<div style="color:#b04040;font-size:13.5px">${!allLoaded?`화물을 다 싣지 못했어요 (${placed.length}/${INV.length}) — 회전·재배치로 빈틈을 메우세요`:`손상이 많아요 (${dmgList.length} > ${g.maxDmg}) — 유리는 맨 위, 중량은 바닥, 벽·이웃에 붙여 흔들림 방지`}</div><br>`+
+          `<button onclick="retryStage()">🔄 다시 작업</button>`)+
+      `<button onclick="backToStages()" style="background:#5a6270">🗂 스케줄로</button>`;
+    document.getElementById('modal').style.display='flex';
+    return;
+  }
+  // (자유 모드 폴백)
+  const base=cbmUsed*100, bonus=(nextUnplaced()<0)?500:0, penalty=dmgCbm*220;
   const score=Math.max(0, base+bonus-penalty-handCost);
-  document.getElementById('modalBody').innerHTML=
-    `<h2>📋 하역 결과</h2>`+
-    `적재: <b>${loaded}/${total}</b>개 · <b>${cbmOf(cbmUsed)} CBM</b> (적재율 ${Math.round(cbmUsed/(CW*CD*CH)*100)}%)<br>`+
-    `${dmgList.length? `💥 손상: <b>${dmgList.length}개</b> (${cbmOf(dmgCbm)} CBM)`:'✅ 무손상 완벽 배송!'} · 🏗 핸들링 ${handCost}<br><br>`+
-    `<div style="font-size:13px;color:#666">적재 +${base} ${bonus?`· 완주 +${bonus} `:''}${penalty?`· 손상 -${penalty}`:''} · 핸들링 -${handCost}</div>`+
-    `<div style="font-size:26px;margin-top:6px">최종 <b>${score}</b>점</div>`+
-    (dmgList.length? `<div style="font-size:12px;color:#999;margin-top:6px">💡 유리(⚠️)는 위에 아무것도 얹지 말고, 중량(⬛)은 바닥에. 빈틈이 많으면 항해 중 흔들려요.</div>`
-                   : `<div style="font-size:12px;color:#999;margin-top:6px">💡 핸들링을 줄이려면 재배치를 적게 — 한 번에 제자리에. 높이 쌓을수록 크레인 비용↑</div>`)+
-    `<button onclick="location.reload()">🔄 다시 도전</button>`;
+  mB.innerHTML=`<h2>📋 하역 결과</h2>적재율 ${Math.round(rate*100)}% · 손상 ${dmgList.length}개 · 최종 <b>${score}</b>점<br><button onclick="backToStages()">🗂 스케줄로</button>`;
   document.getElementById('modal').style.display='flex';
 }
 
@@ -487,8 +587,8 @@ function pd(e){return Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.tou
 function updateHUD(){
   const cbm=placed.reduce((a,p)=>a+p.w*p.d*p.h,0);
   const remain=INV.filter(x=>!x.placed).length;
-  document.getElementById('score').innerHTML=`${CONTAINERS[curCon].icon} <b>${CONTAINERS[curCon].name}</b> · 적재 <b>${placed.length}/${INV.length}</b> · <b>${cbmOf(cbm)} CBM</b> (${Math.round(cbm/(CW*CD*CH)*100)}%) · 🏗 <b>${handCost}</b><br>남은 화물: ${remain}개 · 🚢로 컨테이너 교체 · 🤖 AI`;
-  const cb=document.getElementById('conBtn'); if(cb) cb.textContent=`${CONTAINERS[curCon].icon} ${CONTAINERS[curCon].name.replace('ft ',"ft·")}`;
+  const stageTag = curStage? `📋 St${curStageIdx+1} · 🎯전량${curStage.goal.maxDmg===0?'·무손상':''}` : '';
+  document.getElementById('score').innerHTML=`${CONTAINERS[curCon].icon} <b>${CONTAINERS[curCon].name}</b> ${stageTag} · 적재 <b>${placed.length}/${INV.length}</b> · <b>${cbmOf(cbm)} CBM</b> (${Math.round(cbm/(CW*CD*CH)*100)}%) · 🏗 <b>${handCost}</b><br>남은 화물: ${remain}개 · 다 실으면 ⚓ 출항`;
   // 화물 목록 — 클릭해서 선택, 배치된 건 흐리게
   document.getElementById('next').innerHTML=INV.map((item,idx)=>{
     const T=TYPES[item.type]; const cls=item.placed?'done':idx===curSel?'cur':'';
@@ -541,6 +641,7 @@ addEventListener('pointerup',()=>{ idrag=false; });
 function resize(){ renderer.setSize(innerWidth,innerHeight); camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); if(insActive) sizeIns(); }
 addEventListener('resize',resize);
 loadManifest(); resize(); resetView(); updateHUD();
+renderStageSelect();   // 🚢 시작은 스테이지 선택 화면부터
 let t=0;
 renderer.setAnimationLoop(()=>{
   // 문
