@@ -257,10 +257,10 @@ function resize(){ renderer.setSize(innerWidth, innerHeight); camera.aspect = in
 addEventListener('resize', resize);
 resize(); updateCam(); updateStats();
 renderer.setAnimationLoop(() => {
-  // 🚪 문 여닫이 보간 (힌지 회전)
+  // 🚪 문 여닫이 보간 (힌지 회전) — 실제 컨테이너처럼 바깥(+x)으로 활짝
   if (Math.abs(doorOpen - doorTarget) > 0.001) {
     doorOpen += (doorTarget - doorOpen) * 0.12;
-    for (const d of doors) d.pivot.rotation.y = d.sign * doorOpen * Math.PI * 0.62;
+    for (const d of doors) d.pivot.rotation.y = -d.sign * doorOpen * Math.PI * 0.82;
   }
   renderer.render(scene, camera);
 });
