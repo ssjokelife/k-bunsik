@@ -110,17 +110,24 @@ const TYPES = {
   pipe:    { w:3,d:1,h:1, wt:1.4, color:0x8a8a92, name:'강관번들',   icon:'⛓', status:'중량·장척', desc:'강관 다발', heavy:true },
   glass:   { w:1,d:1,h:2, wt:0.5, color:0x88c0d0, name:'판유리',     icon:'⚠️', status:'깨짐주의',  desc:'A프레임 판유리 · 상단금지', fragile:true },
   machine: { w:2,d:2,h:2, wt:3.2, color:0x6a6e78, name:'기계장비',   icon:'⚙️', status:'초중량',    desc:'팔레트 위 기계', heavy:true },
+  frozen:  { w:1,d:1,h:1, wt:0.4, color:0x9ad0e8, name:'냉동식품',   icon:'❄️', status:'냉동유지',  desc:'냉동육·수산 박스 (-18℃)', frozen:true },
+  produce: { w:2,d:1,h:2, wt:0.5, color:0x8ad090, name:'청과팔레트', icon:'🥬', status:'냉장유지',  desc:'과일·채소 팔레트 (+4℃)', chilled:true },
 };
-// 화물 목록 (총 칸수 > 72 → 다 못 넣음. 순서는 사용자가 자유롭게 — 넣는 순서가 곧 전략)
-const MANIFEST = ['machine','ibc','pallet','pallet','crate','pipe','pipe','bigbag','bigbag','glass','glass','drum','drum','drum','carton','carton','carton','carton'];
-const INV = MANIFEST.map(type=>({type, placed:false}));   // 인벤토리 (배치 상태)
-let nextId = 0;
+// 컨테이너별 화물 목록 (크기에 비례 · 냉동엔 냉동화물). 총 칸수 > 컨테이너 → 다 못 넣음
+const MANIFESTS = {
+  '20gp': ['machine','ibc','pallet','pallet','crate','pipe','pipe','bigbag','bigbag','glass','glass','drum','drum','drum','carton','carton','carton','carton'],
+  '40gp': ['machine','machine','ibc','ibc','pallet','pallet','pallet','crate','crate','pipe','pipe','bigbag','bigbag','bigbag','glass','glass','drum','drum','drum','drum','carton','carton','carton','carton','carton','carton'],
+  '40hc': ['machine','machine','ibc','ibc','ibc','pallet','pallet','pallet','pallet','crate','crate','pipe','pipe','pipe','bigbag','bigbag','bigbag','glass','glass','glass','drum','drum','drum','drum','carton','carton','carton','carton','carton','carton','carton','carton'],
+  '20rf': ['produce','produce','produce','produce','frozen','frozen','frozen','frozen','frozen','frozen','frozen','carton','carton','produce','frozen','carton'],
+};
+let INV = [], nextId = 0;
+function loadManifest(){ INV = MANIFESTS[curCon].map(type=>({type, placed:false})); }
 
 // ═══ 화물 3D 형상 빌더 (원점 중심, w×h×d 셀) ═══
 function mkMesh(geo,color,rough=0.6,metal=0.1,opts={}){ const m=new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal,...opts}); return new THREE.Mesh(geo,m); }
 function buildCargo(type,w,h,d){
   const t=TYPES[type], W=w*CELLX*0.94, H=h*CELLY*0.94, D=d*CELLZ*0.94, g=new THREE.Group();
-  if(type==='pallet'){
+  if(type==='pallet'||type==='produce'){
     const pal=mkMesh(new THREE.BoxGeometry(W,H*0.1,D),0x8a6a44,0.85); pal.position.y=-H*0.45; g.add(pal);
     for(const sx of [-W*0.35,0,W*0.35]){ const foot=mkMesh(new THREE.BoxGeometry(0.06,H*0.08,D*0.9),0x6a5236,0.85); foot.position.set(sx,-H*0.5,0); g.add(foot); }
     const load=mkMesh(new THREE.BoxGeometry(W*0.94,H*0.78,D*0.94), t.color,0.7,0.05); load.position.y=H*0.04; g.add(load);
@@ -244,7 +251,8 @@ function markInvPlaced(type){ const it=INV.find(x=>x.type===type&&!x.placed); if
 window.clearAll=()=>{
   placed.slice().forEach(p=>{ con.remove(p.mesh); if(p.mesh.userData.label) con.remove(p.mesh.userData.label); });
   placed.length=0; for(const kk in occ) delete occ[kk];
-  INV.forEach(x=>x.placed=false); selectedP=null; curSel=0; handCost=0; departed=false;
+  loadManifest();   // 컨테이너별 화물 목록 재생성
+  selectedP=null; curSel=0; handCost=0; departed=false;
   con.rotation.set(0,0,0); doorTarget=1; updateHUD();
 };
 
@@ -532,7 +540,7 @@ addEventListener('pointerup',()=>{ idrag=false; });
 
 function resize(){ renderer.setSize(innerWidth,innerHeight); camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); if(insActive) sizeIns(); }
 addEventListener('resize',resize);
-resize(); resetView(); updateHUD();
+loadManifest(); resize(); resetView(); updateHUD();
 let t=0;
 renderer.setAnimationLoop(()=>{
   // 문
