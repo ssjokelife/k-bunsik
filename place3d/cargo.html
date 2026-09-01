@@ -22,12 +22,13 @@
   #score { position:fixed; top:40px; left:10px; font-size:12px; line-height:1.55;
     background:rgba(0,0,0,.5); border-radius:10px; padding:7px 11px; z-index:5; }
   #score b { color:#ecc94b; }
-  #next { position:fixed; bottom:56px; left:0; right:0; display:flex; gap:6px; justify-content:center;
-    flex-wrap:wrap; padding:0 8px; z-index:5; }
+  #next { position:fixed; bottom:56px; left:0; right:0; display:flex; gap:6px;
+    flex-wrap:nowrap; overflow-x:auto; padding:0 10px; z-index:5; -webkit-overflow-scrolling:touch; }
+  #next::-webkit-scrollbar { height:0; }
   #next .card { background:#1b1e27; border:2px solid #3a4356; border-radius:9px; padding:5px 8px;
-    font-size:12px; min-width:52px; text-align:center; }
+    font-size:12px; min-width:52px; text-align:center; flex:0 0 auto; cursor:pointer; }
   #next .card.cur { border-color:#ffd08a; background:#2a2418; }
-  #next .card.done { opacity:.35; }
+  #next .card.done { opacity:.32; cursor:default; }
   #bottom { position:fixed; bottom:0; left:0; right:0; padding:9px; display:flex; gap:8px;
     justify-content:center; background:linear-gradient(transparent, rgba(14,16,21,.92)); z-index:5; }
   #hint { position:fixed; bottom:98px; left:50%; transform:translateX(-50%);
@@ -78,8 +79,10 @@ const TYPES = {
   glass:   { w:1,d:1,h:2, wt:1, color:0x88c0d0, name:'판유리', icon:'⚠️', fragile:true },
   machine: { w:1,d:1,h:1, wt:4, color:0x6a6e78, name:'기계',   icon:'⚙️', heavy:true },
 };
-// 미션 화물 큐 (총 CBM > 컨테이너 → 다 못 넣음: "최대한 많이"의 긴장)
-const MISSION = ['machine','drum','glass','glass','carton','crate','pipe','carton','drum','crate','glass','carton'];
+// 화물 목록 (순서는 사용자가 자유롭게 — 넣는 순서가 곧 전략)
+const MANIFEST = ['machine','drum','glass','glass','carton','crate','pipe','carton','drum','crate','glass','carton'];
+const INV = MANIFEST.map(type=>({type, placed:false}));   // 인벤토리 (배치 상태)
+let nextId = 0;
 
 // ═══ 화물 3D 형상 빌더 (원점 중심, w×h×d 셀) ═══
 function mkMesh(geo,color,rough=0.6,metal=0.1,opts={}){ const m=new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal,...opts}); return new THREE.Mesh(geo,m); }
@@ -174,9 +177,11 @@ let doorOpen=1, doorTarget=1;
 
 // ═══ 상태 ═══
 const occ = {};   // "i,j,k" -> cargoId
-const placed = [];   // {id, type, i,j,k, w,d,h, mesh, damaged}
-let queueIdx = 0, rot = 0;   // rot: 0 or 1 (90도)
+const placed = [];   // {id, type, i,j,k, w,d,h, mesh, damaged, invIdx}
+let curSel = 0, rot = 0;   // curSel: 선택된 인벤토리 인덱스, rot: 0/1 (90도)
 let departed = false;
+const itemById = id => placed.find(p=>p.id===id);
+function nextUnplaced(from=0){ for(let k=0;k<INV.length;k++){ const idx=(from+k)%INV.length; if(!INV[idx].placed) return idx; } return -1; }
 
 const key = (i,j,k)=>`${i},${j},${k}`;
 function footprint(type, rot){ const t=TYPES[type]; return rot? {w:t.d,d:t.w,h:t.h} : {w:t.w,d:t.d,h:t.h}; }
@@ -196,8 +201,8 @@ function canPlace(type,rot,i,j){
   return null;
 }
 function place(type,rot,i,j){
-  const spot=canPlace(type,rot,i,j); if(!spot) return false;
-  const t=TYPES[type], id=placed.length;
+  const spot=canPlace(type,rot,i,j); if(!spot) return null;
+  const t=TYPES[type], id=nextId++;
   const mesh=buildCargo(type, spot.w, spot.h, spot.d);
   mesh.position.set(
     OX*CELL + (spot.i+spot.w/2)*CELL,
@@ -207,10 +212,10 @@ function place(type,rot,i,j){
   // 라벨(fragile/heavy 아이콘 스프라이트)
   if(t.fragile||t.heavy){ const s=makeLabel(t.icon); s.position.copy(mesh.position); s.position.y+=spot.h*0.5+0.15; con.add(s); mesh.userData.label=s; }
   for(let di=0;di<spot.w;di++)for(let dj=0;dj<spot.d;dj++)for(let dk=0;dk<spot.h;dk++) occ[key(spot.i+di,spot.j+dj,spot.k+dk)]=id;
-  const item={id,type,rot,...spot,mesh,damaged:false};
+  const item={id,type,rot,...spot,mesh,damaged:false,invIdx:null};
   mesh.userData.owner=item;
   placed.push(item);
-  return true;
+  return item;
 }
 // 셀 점유 갱신 (이동용)
 function setOcc(p, val){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++)for(let dk=0;dk<p.h;dk++){ if(val===null) delete occ[key(p.i+di,p.j+dj,p.k+dk)]; else occ[key(p.i+di,p.j+dj,p.k+dk)]=val; } }
@@ -240,20 +245,18 @@ window.rotateCargo=()=>{
       moveItem(p,spot.i,spot.j,spot.k);
       flash('회전 완료');
     } else { setOcc(p,p.id); flash('회전할 공간이 없어요'); }
-  } else { rot^=1; flash('다음 화물 방향: '+(rot?'세로':'가로')); }
+  } else { rot^=1; updateHUD(); flash('실을 방향: '+(rot?'세로':'가로')); }
 };
-window.undo=()=>{   // 선택 화물 제거(큐 반환) 또는 마지막 것
+window.undo=()=>{   // 선택 화물 제거 또는 마지막 것 → 화물 목록으로 반환
   if(departed) return;
   const p = selectedP || placed[placed.length-1];
   if(!p) return;
-  const idx=placed.indexOf(p);
   con.remove(p.mesh); if(p.mesh.userData.label) con.remove(p.mesh.userData.label);
   setOcc(p,null);
-  placed.splice(idx,1);
-  // 큐 되돌리기: 이 화물 타입을 현재 큐 위치에 다시 (맨 앞 미배치로)
-  MISSION.splice(queueIdx,0,p.type); // 다음에 다시 놓을 수 있게
+  placed.splice(placed.indexOf(p),1);
+  if(p.invIdx!=null){ INV[p.invIdx].placed=false; curSel=p.invIdx; }   // 목록으로 되돌리고 선택
   if(selectedP===p) selectedP=null;
-  updateHUD(); flash('제거됨 — 다시 놓을 수 있어요');
+  updateHUD(); flash('내렸어요 — 다시 실을 수 있어요');
 };
 
 // ═══ 출항 & 손상 판정 ═══
@@ -277,7 +280,7 @@ function sailAndJudge(){
       // 1) 유리 위에 무엇이든 실림 → 눌림
       if(t.fragile){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++) if(occ[key(p.i+di,p.j+dj,p.k+p.h)]!==undefined) hit=true; }
       // 2) 중량이 바닥이 아닌 곳(k>0)에 → 아래 화물 짓눌림
-      if(t.heavy && p.k>0){ hit=true; const below=occ[key(p.i,p.j,p.k-1)]; if(below!==undefined) placed[below].damaged=true; }
+      if(t.heavy && p.k>0){ hit=true; const bId=occ[key(p.i,p.j,p.k-1)]; const below=bId!==undefined?itemById(bId):null; if(below) below.damaged=true; }
       // 3) 적재율 낮음 → 흔들림: 위·옆이 다 비어 안 끼인 화물 손상 확률
       if(fillRate<0.55){
         const topEmpty=occ[key(p.i,p.j,p.k+p.h)]===undefined && p.k+p.h<CH;
@@ -294,9 +297,9 @@ function sailAndJudge(){
 function showResult(cbmUsed){
   const dmgList=placed.filter(p=>p.damaged);
   const dmgCbm=dmgList.reduce((a,p)=>a+p.w*p.d*p.h,0);
-  const loaded=placed.length, total=MISSION.length;
+  const loaded=placed.length, total=INV.length;
   const base=cbmUsed*100;
-  const bonus=(queueIdx>=MISSION.length)?500:0;
+  const bonus=(nextUnplaced()<0)?500:0;   // 전량 적재 보너스
   const penalty=dmgCbm*220;
   const score=Math.max(0, base+bonus-penalty);
   document.getElementById('modalBody').innerHTML=
@@ -354,12 +357,16 @@ function dropGrab(x,y){
   if(!ok){ moveItem(grabP,orig.i,orig.j,orig.k); flash('그 자리엔 안 들어가요 — 제자리로'); }
 }
 function tapPlace(x,y){
-  if(departed||queueIdx>=MISSION.length) return;
+  if(departed) return;
+  if(curSel<0||INV[curSel].placed){ curSel=nextUnplaced(); }
+  if(curSel<0){ flash('화물을 다 실었어요 — ⚓ 출항!'); return; }
   const fc=floorCell(x,y); if(!fc) return;
-  const type=MISSION[queueIdx];
-  if(place(type,rot,fc.i,fc.j)){ queueIdx++; updateHUD(); }
+  const inv=INV[curSel];
+  const p=place(inv.type,rot,fc.i,fc.j);
+  if(p){ inv.placed=true; p.invIdx=curSel; curSel=nextUnplaced(curSel); updateHUD(); }
   else flash('여기엔 안 들어가요 (공간 부족/지지 없음)');
 }
+window.pickInv=(idx)=>{ if(departed||INV[idx].placed) return; curSel=idx; updateHUD(); flash(`선택: ${TYPES[INV[idx].type].icon} ${TYPES[INV[idx].type].name} — 바닥에 탭!`); };
 canvas.addEventListener('pointerdown',e=>{try{canvas.setPointerCapture(e.pointerId);}catch(_){}onDown(e.clientX,e.clientY);});
 canvas.addEventListener('pointermove',e=>onMove(e.clientX,e.clientY));
 canvas.addEventListener('pointerup',e=>onUp(e.clientX,e.clientY));
@@ -372,15 +379,17 @@ function pd(e){return Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.tou
 // ═══ HUD ═══
 function updateHUD(){
   const cbm=placed.reduce((a,p)=>a+p.w*p.d*p.h,0);
-  document.getElementById('score').innerHTML=`📦 적재 <b>${placed.length}/${MISSION.length}</b> · <b>${cbm}/20 CBM</b><br>남은 화물: ${MISSION.length-queueIdx}개`;
-  // 다음 화물 큐
-  document.getElementById('next').innerHTML=MISSION.map((t,idx)=>{
-    const T=TYPES[t]; const cls=idx<queueIdx?'done':idx===queueIdx?'cur':'';
-    return `<div class="card ${cls}">${T.icon}<br>${T.name}</div>`;
-  }).slice(Math.max(0,queueIdx-1), queueIdx+4).join('');
-  const cur=MISSION[queueIdx];
-  document.getElementById('bottom').innerHTML = cur
-    ? `<button class="hot">다음: ${TYPES[cur].icon} ${TYPES[cur].name} <span style="opacity:.7">(${footprint(cur,rot).w}×${footprint(cur,rot).d}×${TYPES[cur].h})</span> — 바닥 탭!</button>`
+  const remain=INV.filter(x=>!x.placed).length;
+  document.getElementById('score').innerHTML=`📦 적재 <b>${placed.length}/${INV.length}</b> · <b>${cbm}/20 CBM</b><br>남은 화물: ${remain}개 (골라 실으세요)`;
+  // 화물 목록 — 클릭해서 선택, 배치된 건 흐리게
+  document.getElementById('next').innerHTML=INV.map((item,idx)=>{
+    const T=TYPES[item.type]; const cls=item.placed?'done':idx===curSel?'cur':'';
+    return `<div class="card ${cls}" onclick="pickInv(${idx})">${T.icon}<br>${T.name}</div>`;
+  }).join('');
+  const cur = curSel>=0 && !INV[curSel]?.placed ? INV[curSel] : null;
+  document.getElementById('bottom').innerHTML = remain>0
+    ? (cur? `<button class="hot" onclick="pickInv(${curSel})">실을 화물: ${TYPES[cur.type].icon} ${TYPES[cur.type].name} <span style="opacity:.7">(${footprint(cur.type,rot).w}×${footprint(cur.type,rot).d}×${TYPES[cur.type].h})</span> — 바닥 탭!</button>`
+             : `<button class="hot">↑ 화물 목록에서 실을 것을 고르세요</button>`)
     : `<button class="go" onclick="depart()">⚓ 다 실었다! 출항</button>`;
 }
 let ht; function flash(m){ const h=document.getElementById('hint'); h.textContent=m; clearTimeout(ht); ht=setTimeout(()=>h.textContent='바닥 탭=놓기 · 화물 탭=선택 · 화물 드래그=이동 · ↻회전 · ↩제거',2400); }
