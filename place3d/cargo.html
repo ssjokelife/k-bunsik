@@ -69,16 +69,60 @@ const CW = 5, CD = 2, CH = 2;   // 셀 격자 5×2×2 = 20셀
 const CELL = 1.0;
 const OX = -CW/2, OZ = -CD/2;   // 셀→월드 오프셋 (컨테이너 중앙정렬, 셀은 1m라 격자와 컨테이너 살짝 다름 무시)
 
-// ═══ 화물 종류 ═══
+// ═══ 화물 종류 (실물 형상) ═══
 const TYPES = {
-  box:   { w:1,d:1,h:1, wt:1, color:0x5aa0e8, name:'일반',  icon:'📦' },
-  long:  { w:2,d:1,h:1, wt:2, color:0x7fd18a, name:'대형',  icon:'📗' },
-  tall:  { w:1,d:1,h:2, wt:2, color:0xb07fd1, name:'장척',  icon:'🗼' },
-  glass: { w:1,d:1,h:1, wt:1, color:0xecc94b, name:'유리',  icon:'⚠️', fragile:true },
-  heavy: { w:1,d:1,h:1, wt:4, color:0xe0705a, name:'중량',  icon:'⬛', heavy:true },
+  carton:  { w:1,d:1,h:1, wt:1, color:0xc8a878, name:'박스',   icon:'📦' },
+  drum:    { w:1,d:1,h:1, wt:2, color:0x3a7ac0, name:'드럼통', icon:'🛢' },
+  crate:   { w:2,d:1,h:1, wt:2, color:0x9a7a4a, name:'목상자', icon:'📦' },
+  pipe:    { w:2,d:1,h:1, wt:3, color:0x8a8a92, name:'강관',   icon:'⬛', heavy:true },
+  glass:   { w:1,d:1,h:2, wt:1, color:0x88c0d0, name:'판유리', icon:'⚠️', fragile:true },
+  machine: { w:1,d:1,h:1, wt:4, color:0x6a6e78, name:'기계',   icon:'⚙️', heavy:true },
 };
 // 미션 화물 큐 (총 CBM > 컨테이너 → 다 못 넣음: "최대한 많이"의 긴장)
-const MISSION = ['heavy','heavy','glass','glass','box','long','tall','box','box','long','glass','box'];
+const MISSION = ['machine','drum','glass','glass','carton','crate','pipe','carton','drum','crate','glass','carton'];
+
+// ═══ 화물 3D 형상 빌더 (원점 중심, w×h×d 셀) ═══
+function mkMesh(geo,color,rough=0.6,metal=0.1,opts={}){ const m=new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal,...opts}); return new THREE.Mesh(geo,m); }
+function buildCargo(type,w,h,d){
+  const t=TYPES[type], W=w*CELL*0.94, H=h*CELL*0.94, D=d*CELL*0.94, g=new THREE.Group();
+  if(type==='drum'){
+    const r=Math.min(W,D)*0.46;
+    g.add(mkMesh(new THREE.CylinderGeometry(r,r,H*0.96,20), t.color,0.45,0.4));
+    for(const yy of [H*0.32,-H*0.32]){ const ring=mkMesh(new THREE.CylinderGeometry(r*1.04,r*1.04,H*0.05,20),0x2a557a,0.5,0.5); ring.position.y=yy; g.add(ring); }
+    const lid=mkMesh(new THREE.CylinderGeometry(r*0.42,r*0.42,H*0.05,12),0xd0d4dc,0.4,0.6); lid.position.y=H*0.48; g.add(lid);
+  } else if(type==='pipe'){
+    const pr=Math.min(H,D)*0.24;
+    for(const [oy,oz] of [[0.42,0.4],[0.42,-0.4],[-0.42,0.4],[-0.42,-0.4],[0,0]]){
+      const p=mkMesh(new THREE.CylinderGeometry(pr,pr,W*0.98,14), t.color,0.4,0.65); p.rotation.z=Math.PI/2; p.position.set(0,oy*H*0.5,oz*D*0.85); g.add(p); }
+    for(const xx of [-W*0.34,W*0.34]){ const band=mkMesh(new THREE.TorusGeometry(Math.max(H,D)*0.42,0.025,6,18),0x2a2a30,0.5,0.3); band.rotation.y=Math.PI/2; band.position.x=xx; g.add(band); }
+  } else if(type==='crate'){
+    g.add(mkMesh(new THREE.BoxGeometry(W,H,D), t.color,0.85,0));
+    const fr=0.055, fm=0x6a5230;
+    for(const sx of [-1,1])for(const sz of [-1,1]){ const post=mkMesh(new THREE.BoxGeometry(fr,H*1.01,fr),fm,0.85); post.position.set(sx*W/2,0,sz*D/2); g.add(post); }
+    for(const yy of [-H*0.42,H*0.42]){
+      for(const sz of [-1,1]){ const b=mkMesh(new THREE.BoxGeometry(W*1.01,fr,fr),fm,0.85); b.position.set(0,yy,sz*D/2); g.add(b); }
+      for(const sx of [-1,1]){ const b=mkMesh(new THREE.BoxGeometry(fr,fr,D*1.01),fm,0.85); b.position.set(sx*W/2,yy,0); g.add(b); }
+    }
+  } else if(type==='glass'){
+    const pane=mkMesh(new THREE.BoxGeometry(W*0.9,H*0.82,D*0.16), t.color,0.15,0.1,{transparent:true,opacity:0.5}); pane.position.y=H*0.06; g.add(pane);
+    g.add((()=>{ const b=mkMesh(new THREE.BoxGeometry(W,H*0.12,D),0x8a6a4a,0.85); b.position.y=-H*0.44; return b; })());
+    for(const sx of [-W*0.42,W*0.42]){ const post=mkMesh(new THREE.BoxGeometry(0.05,H*0.85,0.05),0x8a6a4a,0.85); post.position.x=sx; g.add(post); }
+  } else if(type==='machine'){
+    const body=mkMesh(new THREE.BoxGeometry(W,H*0.72,D), t.color,0.5,0.55); body.position.y=-H*0.05; g.add(body);
+    const top=mkMesh(new THREE.BoxGeometry(W*0.5,H*0.3,D*0.5),0x4a4e58,0.5,0.55); top.position.y=H*0.32; g.add(top);
+    for(const sx of [-W*0.28,W*0.28]){ const pv=mkMesh(new THREE.CylinderGeometry(0.045,0.045,H*0.5,8),0x9aa0aa,0.4,0.6); pv.position.set(sx,H*0.15,D*0.28); g.add(pv); }
+    const pal=mkMesh(new THREE.BoxGeometry(W*1.02,0.08,D*1.02),0x8a6a4a,0.9); pal.position.y=-H*0.5; g.add(pal);
+  } else {   // carton
+    g.add(mkMesh(new THREE.BoxGeometry(W,H,D), t.color,0.78,0));
+    const tm=0x9a7550;
+    const t1=mkMesh(new THREE.BoxGeometry(W*1.01,0.028,D*0.24),tm,0.6); t1.position.y=H*0.5; g.add(t1);
+    const t2=mkMesh(new THREE.BoxGeometry(W*0.24,0.028,D*1.01),tm,0.6); t2.position.y=H*0.5; g.add(t2);
+  }
+  g.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
+  return g;
+}
+function ownerOf(o){ while(o){ if(o.userData&&o.userData.owner) return o.userData.owner; o=o.parent; } return null; }
+function paintCargo(mesh,color,emissive){ mesh.traverse(o=>{ if(o.isMesh){ if(color!=null)o.material.color.setHex(color); if(emissive!=null)o.material.emissive.setHex(emissive); } }); }
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -154,9 +198,7 @@ function canPlace(type,rot,i,j){
 function place(type,rot,i,j){
   const spot=canPlace(type,rot,i,j); if(!spot) return false;
   const t=TYPES[type], id=placed.length;
-  const geo=new THREE.BoxGeometry(spot.w*CELL*0.96, spot.h*CELL*0.96, spot.d*CELL*0.96);
-  const mat=new THREE.MeshStandardMaterial({ color:t.color, roughness:0.55 });
-  const mesh=new THREE.Mesh(geo,mat); mesh.castShadow=true; mesh.receiveShadow=true;
+  const mesh=buildCargo(type, spot.w, spot.h, spot.d);
   mesh.position.set(
     OX*CELL + (spot.i+spot.w/2)*CELL,
     0.06 + (spot.k+spot.h/2)*CELL,
@@ -174,7 +216,7 @@ function place(type,rot,i,j){
 function setOcc(p, val){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++)for(let dk=0;dk<p.h;dk++){ if(val===null) delete occ[key(p.i+di,p.j+dj,p.k+dk)]; else occ[key(p.i+di,p.j+dj,p.k+dk)]=val; } }
 function meshPos(p){ return new THREE.Vector3(OX*CELL+(p.i+p.w/2)*CELL, 0.06+(p.k+p.h/2)*CELL, OZ*CELL+(p.j+p.d/2)*CELL); }
 function moveItem(p,i,j,k){ p.i=i;p.j=j;p.k=k; const pos=meshPos(p); p.mesh.position.copy(pos); if(p.mesh.userData.label){ p.mesh.userData.label.position.copy(pos); p.mesh.userData.label.position.y+=p.h*0.5+0.15; } setOcc(p,p.id); }
-function highlight(p,on){ p.mesh.material.emissive.setHex(on?0x224466:0x000000); }
+function highlight(p,on){ paintCargo(p.mesh, null, on?0x224466:0x000000); }
 function makeLabel(txt){
   const cv=document.createElement('canvas'); cv.width=64;cv.height=64;
   const cx=cv.getContext('2d'); cx.font='44px sans-serif'; cx.textAlign='center'; cx.fillText(txt,32,46);
@@ -188,15 +230,13 @@ window.rotateCargo=()=>{
     const p=selectedP, nr=p.rot^1;
     setOcc(p,null);
     const spot=canPlace(p.type,nr,p.i,p.j);
-    if(spot){ con.remove(p.mesh); if(p.mesh.userData.label) con.remove(p.mesh.userData.label);
-      // 새 크기로 mesh 재생성
+    if(spot){ const oldLabel=p.mesh.userData.label; con.remove(p.mesh);
       const t=TYPES[p.type];
-      const geo=new THREE.BoxGeometry(spot.w*CELL*0.96,spot.h*CELL*0.96,spot.d*CELL*0.96);
-      const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:t.color,roughness:0.55,emissive:0x224466}));
-      mesh.castShadow=true;mesh.receiveShadow=true; con.add(mesh);
+      const mesh=buildCargo(p.type, spot.w, spot.h, spot.d);
+      con.add(mesh);
       Object.assign(p,{rot:nr,w:spot.w,d:spot.d,h:spot.h,i:spot.i,j:spot.j,k:spot.k,mesh});
-      mesh.userData.owner=p;
-      if(t.fragile||t.heavy){ const s=makeLabel(t.icon); con.add(s); mesh.userData.label=s; }
+      mesh.userData.owner=p; if(oldLabel) mesh.userData.label=oldLabel;
+      paintCargo(mesh,null,0x224466);   // 선택 하이라이트 유지
       moveItem(p,spot.i,spot.j,spot.k);
       flash('회전 완료');
     } else { setOcc(p,p.id); flash('회전할 공간이 없어요'); }
@@ -246,7 +286,7 @@ function sailAndJudge(){
       }
       if(hit) p.damaged=true;
     }
-    placed.filter(p=>p.damaged).forEach(p=>{ p.mesh.material.color.setHex(0xd03030); p.mesh.material.emissive.setHex(0x551010); });
+    placed.filter(p=>p.damaged).forEach(p=>{ paintCargo(p.mesh, 0xd03030, 0x551010); });
     doorTarget=1;   // 문 열어서 결과 공개
     setTimeout(()=>showResult(cbmUsed), 1000);
   }, 3400);
@@ -281,8 +321,8 @@ let mode=null,lastX=0,lastY=0,dX=0,dY=0,moved=false;
 let grabP=null;            // down이 얹힌 배치 화물
 let selectedP=null;        // 선택된 화물 (회전/삭제 대상)
 function setNdc(x,y){ const r=canvas.getBoundingClientRect(); ndc.x=((x-r.left)/r.width)*2-1; ndc.y=-((y-r.top)/r.height)*2+1; ray.setFromCamera(ndc,camera); }
-function pickCargo(x,y){ setNdc(x,y); const h=ray.intersectObjects(placed.map(p=>p.mesh),false)[0]; return h?h.object.userData.owner:null; }
-function floorCell(x,y){ setNdc(x,y); const h=ray.intersectObjects([floorPlate,...placed.map(p=>p.mesh)],false)[0]; if(!h)return null;
+function pickCargo(x,y){ setNdc(x,y); const h=ray.intersectObjects(placed.map(p=>p.mesh),true)[0]; return h?ownerOf(h.object):null; }
+function floorCell(x,y){ setNdc(x,y); const h=ray.intersectObjects([floorPlate,...placed.map(p=>p.mesh)],true)[0]; if(!h)return null;
   return { i:Math.floor(h.point.x-OX*CELL), j:Math.floor(h.point.z-OZ*CELL), pt:h.point }; }
 function selectP(p){ if(selectedP) highlight(selectedP,false); selectedP=p; if(p){ highlight(p,true); flash(`선택: ${TYPES[p.type].icon} ${TYPES[p.type].name} — 드래그로 이동, ↻ 회전, ✕ 제거`); } }
 
