@@ -40,6 +40,14 @@
     width:86%; max-width:380px; font-size:15px; line-height:1.8; text-align:center; }
   #modal h2 { color:#c05a46; margin-top:0; } #modal b { color:#c05a46; }
   #modal button { width:100%; background:#e8734f; color:#fff; border:0; margin-top:12px; padding:12px; }
+  #inspector { position:fixed; inset:0; background:rgba(10,12,18,.88); display:none;
+    align-items:center; justify-content:center; z-index:25; flex-direction:column; }
+  #inspector .ibox { background:#1b1e27; border-radius:16px; padding:16px 18px; text-align:center; }
+  #ic { border-radius:12px; background:radial-gradient(circle at 50% 40%, #2a3040, #14161c); touch-action:none; cursor:grab; }
+  #iinfo { color:#dde; font-size:14px; line-height:1.7; margin:12px 4px 4px; }
+  #iinfo b { color:#ffd08a; font-size:16px; }
+  #inspector .close { background:#3a4356; color:#fff; border:0; border-radius:9px; padding:10px 30px; margin-top:12px; font-size:14px; }
+  #inspector .tip { color:#889; font-size:11.5px; margin-top:8px; }
 </style>
 </head>
 <body>
@@ -49,6 +57,7 @@
   <span style="flex:1"></span>
   <button onclick="rotateCargo()">↻ 회전</button>
   <button onclick="undo()">↩ 취소</button>
+  <button onclick="inspectSel()">🔍 보기</button>
   <button onclick="aiDemo()">🤖 AI</button>
   <button onclick="resetView()">🎥</button>
   <button class="go" onclick="depart()">⚓ 출항</button>
@@ -58,6 +67,12 @@
 <div id="hint">바닥 탭=놓기 · 화물 탭=선택 · 화물 드래그=이동 · ↻회전 · ↩제거</div>
 <div id="bottom"></div>
 <div id="modal"><div class="box" id="modalBody"></div></div>
+<div id="inspector"><div class="ibox">
+  <canvas id="ic"></canvas>
+  <div id="iinfo"></div>
+  <div class="tip">🔄 드래그해서 돌려보기 · 손 떼면 자동 회전</div>
+  <button class="close" onclick="closeInspector()">닫기</button>
+</div></div>
 
 <script type="importmap">
 { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
@@ -439,7 +454,39 @@ function updateHUD(){
 }
 let ht; function flash(m){ const h=document.getElementById('hint'); h.textContent=m; clearTimeout(ht); ht=setTimeout(()=>h.textContent='바닥 탭=놓기 · 화물 탭=선택 · 화물 드래그=이동 · ↻회전 · ↩제거',2400); }
 
-function resize(){ renderer.setSize(innerWidth,innerHeight); camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); }
+// ═══ 🔍 화물 인스펙터 (별도 3D 뷰 — 클릭한 화물 확인 + 돌려보기) ═══
+const insCanvas=document.getElementById('ic');
+const insR=new THREE.WebGLRenderer({canvas:insCanvas,antialias:true,alpha:true});
+insR.setPixelRatio(Math.min(devicePixelRatio,2));
+const insS=new THREE.Scene();
+insS.add(new THREE.HemisphereLight(0xffffff,0x445,1.15));
+const il=new THREE.DirectionalLight(0xffffff,0.95); il.position.set(3,5,4); insS.add(il);
+const insC=new THREE.PerspectiveCamera(38,1,0.1,50);
+let insMesh=null, insYaw=0.6, insPitch=0.35, insActive=false, insAuto=true, idrag=false, ilx=0, ily=0;
+function sizeIns(){ const s=Math.min(300, Math.floor(innerWidth*0.72)); insCanvas.style.width=s+'px'; insCanvas.style.height=s+'px'; insR.setSize(s,s,false); insC.aspect=1; insC.updateProjectionMatrix(); }
+window.openInspector=(type)=>{
+  const t=TYPES[type];
+  if(insMesh) insS.remove(insMesh);
+  insMesh=buildCargo(type,t.w,t.h,t.d); insS.add(insMesh);
+  const maxd=Math.max(t.w,t.h,t.d); insC.position.set(0, t.h*0.15, maxd*2.5); insC.lookAt(0,0,0);
+  document.getElementById('iinfo').innerHTML=
+    `<b>${t.icon} ${t.name}</b><br>규격 ${t.w}×${t.d}×${t.h} m · <b>${t.w*t.d*t.h} CBM</b><br>`+
+    `무게 등급 ${t.wt}${t.fragile?' · <span style="color:#ecc94b">⚠️ 취급주의(깨짐)</span>':''}${t.heavy?' · <span style="color:#e0705a">⬛ 중량물</span>':''}`;
+  document.getElementById('inspector').style.display='flex';
+  insActive=true; insAuto=true; insYaw=0.6; insPitch=0.35; sizeIns();
+};
+window.closeInspector=()=>{ document.getElementById('inspector').style.display='none'; insActive=false; };
+window.inspectSel=()=>{
+  let type=null;
+  if(selectedP) type=selectedP.type;
+  else if(curSel>=0 && INV[curSel] && !INV[curSel].placed) type=INV[curSel].type;
+  if(type) openInspector(type); else flash('화물을 먼저 선택하세요 (목록 카드나 실린 화물 탭)');
+};
+insCanvas.addEventListener('pointerdown',e=>{ idrag=true; insAuto=false; ilx=e.clientX; ily=e.clientY; e.stopPropagation(); });
+addEventListener('pointermove',e=>{ if(!idrag)return; insYaw+=(e.clientX-ilx)*0.012; insPitch+=(e.clientY-ily)*0.012; insPitch=Math.max(-1.3,Math.min(1.3,insPitch)); ilx=e.clientX; ily=e.clientY; });
+addEventListener('pointerup',()=>{ idrag=false; });
+
+function resize(){ renderer.setSize(innerWidth,innerHeight); camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); if(insActive) sizeIns(); }
 addEventListener('resize',resize);
 resize(); updateCam(); updateHUD();
 let t=0;
@@ -451,6 +498,8 @@ renderer.setAnimationLoop(()=>{
   // 🤖 리플레이 낙하 연출
   for(const p of placed){ if(p.fall>0){ p.mesh.position.y=(0.06+(p.k+p.h/2)*CELL)+p.fall; p.fall*=0.8; if(p.fall<0.02){ p.fall=0; p.mesh.position.y=0.06+(p.k+p.h/2)*CELL; } } }
   renderer.render(scene,camera);
+  // 🔍 인스펙터 렌더 (열렸을 때만)
+  if(insActive && insMesh){ if(insAuto) insYaw+=0.008; insMesh.rotation.y=insYaw; insMesh.rotation.x=insPitch; insR.render(insS,insC); }
 });
 </script>
 </body>
