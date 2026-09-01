@@ -49,6 +49,7 @@
   <span style="flex:1"></span>
   <button onclick="rotateCargo()">↻ 회전</button>
   <button onclick="undo()">↩ 취소</button>
+  <button onclick="aiDemo()">🤖 AI</button>
   <button onclick="resetView()">🎥</button>
   <button class="go" onclick="depart()">⚓ 출항</button>
 </div>
@@ -182,6 +183,16 @@ let curSel = 0, rot = 0;   // curSel: 선택된 인벤토리 인덱스, rot: 0/1
 let departed = false;
 const itemById = id => placed.find(p=>p.id===id);
 function nextUnplaced(from=0){ for(let k=0;k<INV.length;k++){ const idx=(from+k)%INV.length; if(!INV[idx].placed) return idx; } return -1; }
+// 🏗 핸들링 비용 — 집어넣는 것도 돈이다 (크레인 1회 + 높이 + 대형)
+let handCost = 0;
+function handlingCost(w,h,k){ return 10 + k*6 + ((w*h)>1?5:0); }
+function markInvPlaced(type){ const it=INV.find(x=>x.type===type&&!x.placed); if(it) it.placed=true; }
+window.clearAll=()=>{
+  placed.slice().forEach(p=>{ con.remove(p.mesh); if(p.mesh.userData.label) con.remove(p.mesh.userData.label); });
+  placed.length=0; for(const kk in occ) delete occ[kk];
+  INV.forEach(x=>x.placed=false); selectedP=null; curSel=0; handCost=0; departed=false;
+  con.rotation.set(0,0,0); doorTarget=1; updateHUD();
+};
 
 const key = (i,j,k)=>`${i},${j},${k}`;
 function footprint(type, rot){ const t=TYPES[type]; return rot? {w:t.d,d:t.w,h:t.h} : {w:t.w,d:t.d,h:t.h}; }
@@ -301,14 +312,15 @@ function showResult(cbmUsed){
   const base=cbmUsed*100;
   const bonus=(nextUnplaced()<0)?500:0;   // 전량 적재 보너스
   const penalty=dmgCbm*220;
-  const score=Math.max(0, base+bonus-penalty);
+  const score=Math.max(0, base+bonus-penalty-handCost);
   document.getElementById('modalBody').innerHTML=
     `<h2>📋 하역 결과</h2>`+
     `적재: <b>${loaded}/${total}</b>개 · <b>${cbmUsed} CBM</b> (적재율 ${Math.round(cbmUsed/20*100)}%)<br>`+
-    `${dmgList.length? `💥 손상: <b>${dmgList.length}개</b> (${dmgCbm} CBM)`:'✅ 무손상 완벽 배송!'}<br><br>`+
-    `<div style="font-size:13px;color:#666">적재 +${base} ${bonus?`· 완주 +${bonus} `:''}${penalty?`· 손상 -${penalty}`:''}</div>`+
+    `${dmgList.length? `💥 손상: <b>${dmgList.length}개</b> (${dmgCbm} CBM)`:'✅ 무손상 완벽 배송!'} · 🏗 핸들링 ${handCost}<br><br>`+
+    `<div style="font-size:13px;color:#666">적재 +${base} ${bonus?`· 완주 +${bonus} `:''}${penalty?`· 손상 -${penalty}`:''} · 핸들링 -${handCost}</div>`+
     `<div style="font-size:26px;margin-top:6px">최종 <b>${score}</b>점</div>`+
-    (dmgList.length? `<div style="font-size:12px;color:#999;margin-top:6px">💡 유리(⚠️)는 위에 아무것도 얹지 말고, 중량(⬛)은 바닥에. 빈틈이 많으면 항해 중 흔들려요.</div>`:'')+
+    (dmgList.length? `<div style="font-size:12px;color:#999;margin-top:6px">💡 유리(⚠️)는 위에 아무것도 얹지 말고, 중량(⬛)은 바닥에. 빈틈이 많으면 항해 중 흔들려요.</div>`
+                   : `<div style="font-size:12px;color:#999;margin-top:6px">💡 핸들링을 줄이려면 재배치를 적게 — 한 번에 제자리에. 높이 쌓을수록 크레인 비용↑</div>`)+
     `<button onclick="location.reload()">🔄 다시 도전</button>`;
   document.getElementById('modal').style.display='flex';
 }
@@ -353,7 +365,7 @@ function dropGrab(x,y){
   const fc=floorCell(x,y);
   const orig={i:grabP.i,j:grabP.j,k:grabP.k};
   let ok=false;
-  if(fc){ const spot=canPlace(grabP.type,grabP.rot,fc.i,fc.j); if(spot){ moveItem(grabP,spot.i,spot.j,spot.k); ok=true; } }
+  if(fc){ const spot=canPlace(grabP.type,grabP.rot,fc.i,fc.j); if(spot){ moveItem(grabP,spot.i,spot.j,spot.k); handCost+=8; ok=true; updateHUD(); } }   // 재배치도 비용
   if(!ok){ moveItem(grabP,orig.i,orig.j,orig.k); flash('그 자리엔 안 들어가요 — 제자리로'); }
 }
 function tapPlace(x,y){
@@ -363,10 +375,43 @@ function tapPlace(x,y){
   const fc=floorCell(x,y); if(!fc) return;
   const inv=INV[curSel];
   const p=place(inv.type,rot,fc.i,fc.j);
-  if(p){ inv.placed=true; p.invIdx=curSel; curSel=nextUnplaced(curSel); updateHUD(); }
+  if(p){ inv.placed=true; p.invIdx=curSel; handCost+=handlingCost(p.w,p.h,p.k); curSel=nextUnplaced(curSel); updateHUD(); }
   else flash('여기엔 안 들어가요 (공간 부족/지지 없음)');
 }
-window.pickInv=(idx)=>{ if(departed||INV[idx].placed) return; curSel=idx; updateHUD(); flash(`선택: ${TYPES[INV[idx].type].icon} ${TYPES[INV[idx].type].name} — 바닥에 탭!`); };
+window.pickInv=(idx)=>{ if(departed||INV[idx].placed||replayTimer) return; curSel=idx; updateHUD(); flash(`선택: ${TYPES[INV[idx].type].icon} ${TYPES[INV[idx].type].name} — 바닥에 탭!`); };
+
+// ═══ 🤖 AI 최적 적재 솔버 (휴리스틱: 무거운·큰 것 먼저 바닥, 유리 마지막 위로, 빈틈 최소) ═══
+function vLowestK(vocc,f,i,j){ for(let k=0;k<=CH-f.h;k++){ let ok=true,sup=(k===0);
+  for(let di=0;di<f.w;di++)for(let dj=0;dj<f.d;dj++){ for(let dk=0;dk<f.h;dk++) if(vocc[key(i+di,j+dj,k+dk)]!==undefined) ok=false; if(k>0&&vocc[key(i+di,j+dj,k-1)]!==undefined) sup=true; }
+  if(ok&&sup) return k; } return -1; }
+function solveOptimal(){
+  const items=INV.map((x,idx)=>({type:x.type,idx,...TYPES[x.type]}));
+  items.sort((a,b)=>{ if(!!a.fragile!==!!b.fragile) return a.fragile?1:-1;      // 유리는 맨 나중
+    if(!!a.heavy!==!!b.heavy) return a.heavy?-1:1;                             // 중량은 먼저(바닥)
+    return (b.w*b.d*b.h)-(a.w*a.d*a.h); });                                    // 큰 것 먼저
+  const vocc={}, plan=[];
+  for(const it of items){ let best=null;
+    for(const rr of [0,1]){ const f=footprint(it.type,rr);
+      for(let i=0;i<=CW-f.w;i++)for(let j=0;j<=CD-f.d;j++){ const k=vLowestK(vocc,f,i,j); if(k<0)continue;
+        let sc = it.fragile? k*20 : -k*20;   // 유리는 높이, 나머지는 낮게
+        sc -= (i*2+j);                        // 안쪽·왼쪽부터 채우기
+        if(!best||sc>best.sc) best={sc,i,j,k,rot:rr,f}; } }
+    if(best){ for(let di=0;di<best.f.w;di++)for(let dj=0;dj<best.f.d;dj++)for(let dk=0;dk<best.f.h;dk++) vocc[key(best.i+di,best.j+dj,best.k+dk)]=it.idx;
+      plan.push({type:it.type,rot:best.rot,i:best.i,j:best.j}); } }
+  return plan;
+}
+let replayTimer=null;
+window.aiDemo=()=>{
+  if(replayTimer||departed) return;
+  clearAll();
+  const plan=solveOptimal();
+  flash('🤖 AI가 최적 순서로 적재하는 중…'); let idx=0;
+  replayTimer=setInterval(()=>{
+    if(idx>=plan.length){ clearInterval(replayTimer); replayTimer=null; setTimeout(()=>depart(), 800); return; }
+    const s=plan[idx++]; const p=place(s.type,s.rot,s.i,s.j);
+    if(p){ markInvPlaced(s.type); handCost+=handlingCost(p.w,p.h,p.k); p.fall=2.6; updateHUD(); }
+  }, 400);
+};
 canvas.addEventListener('pointerdown',e=>{try{canvas.setPointerCapture(e.pointerId);}catch(_){}onDown(e.clientX,e.clientY);});
 canvas.addEventListener('pointermove',e=>onMove(e.clientX,e.clientY));
 canvas.addEventListener('pointerup',e=>onUp(e.clientX,e.clientY));
@@ -380,7 +425,7 @@ function pd(e){return Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.tou
 function updateHUD(){
   const cbm=placed.reduce((a,p)=>a+p.w*p.d*p.h,0);
   const remain=INV.filter(x=>!x.placed).length;
-  document.getElementById('score').innerHTML=`📦 적재 <b>${placed.length}/${INV.length}</b> · <b>${cbm}/20 CBM</b><br>남은 화물: ${remain}개 (골라 실으세요)`;
+  document.getElementById('score').innerHTML=`📦 적재 <b>${placed.length}/${INV.length}</b> · <b>${cbm}/20 CBM</b> · 🏗 핸들링 <b>${handCost}</b><br>남은 화물: ${remain}개 (골라 실으세요 · 🤖로 AI 시연)`;
   // 화물 목록 — 클릭해서 선택, 배치된 건 흐리게
   document.getElementById('next').innerHTML=INV.map((item,idx)=>{
     const T=TYPES[item.type]; const cls=item.placed?'done':idx===curSel?'cur':'';
@@ -403,6 +448,8 @@ renderer.setAnimationLoop(()=>{
   if(Math.abs(doorOpen-doorTarget)>0.001){ doorOpen+=(doorTarget-doorOpen)*0.12; for(const d of doors) d.p.rotation.y=-d.sign*doorOpen*Math.PI*0.82; }
   // 항해 롤링
   if(rolling>0){ rolling-=1/60; t+=0.08; con.rotation.z=Math.sin(t)*0.09; con.rotation.x=Math.sin(t*0.7)*0.05; if(rolling<=0){con.rotation.z=0;con.rotation.x=0;} }
+  // 🤖 리플레이 낙하 연출
+  for(const p of placed){ if(p.fall>0){ p.mesh.position.y=(0.06+(p.k+p.h/2)*CELL)+p.fall; p.fall*=0.8; if(p.fall<0.02){ p.fall=0; p.mesh.position.y=0.06+(p.k+p.h/2)*CELL; } } }
   renderer.render(scene,camera);
 });
 </script>
