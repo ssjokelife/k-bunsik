@@ -80,31 +80,52 @@
 <script type="module">
 import * as THREE from 'three';
 
-// ═══ 규격 (셀 = 1m, ISO 20ft 근사) ═══
+// ═══ 규격 (ISO 20ft GP — 격자가 컨테이너를 꽉 채운다) ═══
 const CON = { L: 5.90, W: 2.35, H: 2.39 };
-const CW = 5, CD = 2, CH = 2;   // 셀 격자 5×2×2 = 20셀
-const CELL = 1.0;
-const OX = -CW/2, OZ = -CD/2;   // 셀→월드 오프셋 (컨테이너 중앙정렬, 셀은 1m라 격자와 컨테이너 살짝 다름 무시)
+const CW = 8, CD = 3, CH = 3;   // 격자 8×3×3 = 72칸 (컨테이너 실측에 정확히 맞춤)
+const CELLX = CON.L/CW, CELLY = CON.H/CH, CELLZ = CON.W/CD;   // 칸 크기 ≈ 0.74×0.80×0.78 m
+const CELLV = CELLX*CELLY*CELLZ;   // 칸당 부피 ≈ 0.46 CBM (72칸 = 33.2 CBM = 컨테이너 용적)
+const OX = -CON.L/2, OZ = -CON.W/2;
+const cbmOf = cells => Math.round(cells*CELLV*10)/10;
 
-// ═══ 화물 종류 (실물 형상) ═══
+// ═══ 화물 종류 (실물 규격·상태 — 칸 단위 w×d×h) ═══
 const TYPES = {
-  carton:  { w:1,d:1,h:1, wt:1, color:0xc8a878, name:'박스',   icon:'📦' },
-  drum:    { w:1,d:1,h:1, wt:2, color:0x3a7ac0, name:'드럼통', icon:'🛢' },
-  crate:   { w:2,d:1,h:1, wt:2, color:0x9a7a4a, name:'목상자', icon:'📦' },
-  pipe:    { w:2,d:1,h:1, wt:3, color:0x8a8a92, name:'강관',   icon:'⬛', heavy:true },
-  glass:   { w:1,d:1,h:2, wt:1, color:0x88c0d0, name:'판유리', icon:'⚠️', fragile:true },
-  machine: { w:1,d:1,h:1, wt:4, color:0x6a6e78, name:'기계',   icon:'⚙️', heavy:true },
+  carton:  { w:1,d:1,h:1, wt:0.3, color:0xc8a878, name:'카톤박스',   icon:'📦', status:'일반',      desc:'일반 골판지 박스' },
+  pallet:  { w:2,d:1,h:2, wt:0.6, color:0xcaa060, name:'팔레트화물', icon:'🟫', status:'일반',      desc:'유로파렛트 적재·랩핑' },
+  drum:    { w:1,d:1,h:1, wt:0.2, color:0x2f66b0, name:'드럼통',     icon:'🛢', status:'위험물',    desc:'200L 화학 드럼 · 세워서', hazmat:true, upright:true },
+  ibc:     { w:2,d:1,h:2, wt:1.1, color:0xd0d4dc, name:'IBC탱크',    icon:'🧴', status:'액체·중량', desc:'1000L 케이지 탱크', heavy:true, upright:true },
+  bigbag:  { w:1,d:1,h:2, wt:0.9, color:0xd8c890, name:'톤백',       icon:'🛍', status:'분체',      desc:'1톤 곡물·모래 자루' },
+  crate:   { w:2,d:2,h:1, wt:0.7, color:0x9a7a4a, name:'목상자',     icon:'🪵', status:'일반',      desc:'목재 크레이트' },
+  pipe:    { w:3,d:1,h:1, wt:1.4, color:0x8a8a92, name:'강관번들',   icon:'⛓', status:'중량·장척', desc:'강관 다발', heavy:true },
+  glass:   { w:1,d:1,h:2, wt:0.5, color:0x88c0d0, name:'판유리',     icon:'⚠️', status:'깨짐주의',  desc:'A프레임 판유리 · 상단금지', fragile:true },
+  machine: { w:2,d:2,h:2, wt:3.2, color:0x6a6e78, name:'기계장비',   icon:'⚙️', status:'초중량',    desc:'팔레트 위 기계', heavy:true },
 };
-// 화물 목록 (순서는 사용자가 자유롭게 — 넣는 순서가 곧 전략)
-const MANIFEST = ['machine','drum','glass','glass','carton','crate','pipe','carton','drum','crate','glass','carton'];
+// 화물 목록 (총 칸수 > 72 → 다 못 넣음. 순서는 사용자가 자유롭게 — 넣는 순서가 곧 전략)
+const MANIFEST = ['machine','ibc','pallet','pallet','crate','pipe','pipe','bigbag','bigbag','glass','glass','drum','drum','drum','carton','carton','carton','carton'];
 const INV = MANIFEST.map(type=>({type, placed:false}));   // 인벤토리 (배치 상태)
 let nextId = 0;
 
 // ═══ 화물 3D 형상 빌더 (원점 중심, w×h×d 셀) ═══
 function mkMesh(geo,color,rough=0.6,metal=0.1,opts={}){ const m=new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal,...opts}); return new THREE.Mesh(geo,m); }
 function buildCargo(type,w,h,d){
-  const t=TYPES[type], W=w*CELL*0.94, H=h*CELL*0.94, D=d*CELL*0.94, g=new THREE.Group();
-  if(type==='drum'){
+  const t=TYPES[type], W=w*CELLX*0.94, H=h*CELLY*0.94, D=d*CELLZ*0.94, g=new THREE.Group();
+  if(type==='pallet'){
+    const pal=mkMesh(new THREE.BoxGeometry(W,H*0.1,D),0x8a6a44,0.85); pal.position.y=-H*0.45; g.add(pal);
+    for(const sx of [-W*0.35,0,W*0.35]){ const foot=mkMesh(new THREE.BoxGeometry(0.06,H*0.08,D*0.9),0x6a5236,0.85); foot.position.set(sx,-H*0.5,0); g.add(foot); }
+    const load=mkMesh(new THREE.BoxGeometry(W*0.94,H*0.78,D*0.94), t.color,0.7,0.05); load.position.y=H*0.04; g.add(load);
+    for(const yy of [-0.15,0.2]){ const wrap=mkMesh(new THREE.BoxGeometry(W*0.96,H*0.04,D*0.96),0xffffff,0.2,0.1,{transparent:true,opacity:0.25}); wrap.position.y=H*yy; g.add(wrap); }
+  } else if(type==='ibc'){
+    const tank=mkMesh(new THREE.BoxGeometry(W*0.88,H*0.82,D*0.88), t.color,0.3,0.1,{transparent:true,opacity:0.85}); tank.position.y=H*0.02; g.add(tank);
+    const cageM=0x55585f;
+    for(const yy of [-0.42,-0.15,0.15,0.42]){ const bar=mkMesh(new THREE.BoxGeometry(W*0.96,0.035,D*0.96),cageM,0.5,0.6); bar.position.y=H*yy; g.add(bar); } // 가로 케이지 (프레임만)
+    for(const sx of [-1,1])for(const sz of [-1,1]){ const post=mkMesh(new THREE.BoxGeometry(0.04,H*0.98,0.04),cageM,0.5,0.6); post.position.set(sx*W*0.44,0,sz*D*0.44); g.add(post); }
+    const cap=mkMesh(new THREE.CylinderGeometry(W*0.12,W*0.12,H*0.08,10),0x333,0.4,0.5); cap.position.y=H*0.46; g.add(cap);
+    const pal=mkMesh(new THREE.BoxGeometry(W,0.06,D),0x8a6a44,0.9); pal.position.y=-H*0.48; g.add(pal);
+  } else if(type==='bigbag'){
+    const bag=mkMesh(new THREE.CylinderGeometry(Math.min(W,D)*0.5,Math.min(W,D)*0.44,H*0.9,10), t.color,0.85,0); bag.position.y=-H*0.02; g.add(bag);
+    const top=mkMesh(new THREE.CylinderGeometry(Math.min(W,D)*0.14,Math.min(W,D)*0.2,H*0.12,8),0xb8a870,0.8); top.position.y=H*0.48; g.add(top);
+    for(const a of [0,Math.PI/2]){ const loop=mkMesh(new THREE.TorusGeometry(Math.min(W,D)*0.22,0.02,5,10),0xa89860,0.7); loop.position.y=H*0.44; loop.rotation.y=a; g.add(loop); }
+  } else if(type==='drum'){
     const r=Math.min(W,D)*0.46;
     g.add(mkMesh(new THREE.CylinderGeometry(r,r,H*0.96,20), t.color,0.45,0.4));
     for(const yy of [H*0.32,-H*0.32]){ const ring=mkMesh(new THREE.CylinderGeometry(r*1.04,r*1.04,H*0.05,20),0x2a557a,0.5,0.5); ring.position.y=yy; g.add(ring); }
@@ -231,9 +252,9 @@ function place(type,rot,i,j){
   const t=TYPES[type], id=nextId++;
   const mesh=buildCargo(type, spot.w, spot.h, spot.d);
   mesh.position.set(
-    OX*CELL + (spot.i+spot.w/2)*CELL,
-    0.06 + (spot.k+spot.h/2)*CELL,
-    OZ*CELL + (spot.j+spot.d/2)*CELL);
+    OX + (spot.i+spot.w/2)*CELLX,
+    0.06 + (spot.k+spot.h/2)*CELLY,
+    OZ + (spot.j+spot.d/2)*CELLZ);
   con.add(mesh);
   // 라벨(fragile/heavy 아이콘 스프라이트)
   if(t.fragile||t.heavy){ const s=makeLabel(t.icon); s.position.copy(mesh.position); s.position.y+=spot.h*0.5+0.15; con.add(s); mesh.userData.label=s; }
@@ -245,7 +266,7 @@ function place(type,rot,i,j){
 }
 // 셀 점유 갱신 (이동용)
 function setOcc(p, val){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++)for(let dk=0;dk<p.h;dk++){ if(val===null) delete occ[key(p.i+di,p.j+dj,p.k+dk)]; else occ[key(p.i+di,p.j+dj,p.k+dk)]=val; } }
-function meshPos(p){ return new THREE.Vector3(OX*CELL+(p.i+p.w/2)*CELL, 0.06+(p.k+p.h/2)*CELL, OZ*CELL+(p.j+p.d/2)*CELL); }
+function meshPos(p){ return new THREE.Vector3(OX+(p.i+p.w/2)*CELLX, 0.06+(p.k+p.h/2)*CELLY, OZ+(p.j+p.d/2)*CELLZ); }
 function moveItem(p,i,j,k){ p.i=i;p.j=j;p.k=k; const pos=meshPos(p); p.mesh.position.copy(pos); if(p.mesh.userData.label){ p.mesh.userData.label.position.copy(pos); p.mesh.userData.label.position.y+=p.h*0.5+0.15; } setOcc(p,p.id); }
 function highlight(p,on){ paintCargo(p.mesh, null, on?0x224466:0x000000); }
 function makeLabel(txt){
@@ -330,8 +351,8 @@ function showResult(cbmUsed){
   const score=Math.max(0, base+bonus-penalty-handCost);
   document.getElementById('modalBody').innerHTML=
     `<h2>📋 하역 결과</h2>`+
-    `적재: <b>${loaded}/${total}</b>개 · <b>${cbmUsed} CBM</b> (적재율 ${Math.round(cbmUsed/20*100)}%)<br>`+
-    `${dmgList.length? `💥 손상: <b>${dmgList.length}개</b> (${dmgCbm} CBM)`:'✅ 무손상 완벽 배송!'} · 🏗 핸들링 ${handCost}<br><br>`+
+    `적재: <b>${loaded}/${total}</b>개 · <b>${cbmOf(cbmUsed)} CBM</b> (적재율 ${Math.round(cbmUsed/(CW*CD*CH)*100)}%)<br>`+
+    `${dmgList.length? `💥 손상: <b>${dmgList.length}개</b> (${cbmOf(dmgCbm)} CBM)`:'✅ 무손상 완벽 배송!'} · 🏗 핸들링 ${handCost}<br><br>`+
     `<div style="font-size:13px;color:#666">적재 +${base} ${bonus?`· 완주 +${bonus} `:''}${penalty?`· 손상 -${penalty}`:''} · 핸들링 -${handCost}</div>`+
     `<div style="font-size:26px;margin-top:6px">최종 <b>${score}</b>점</div>`+
     (dmgList.length? `<div style="font-size:12px;color:#999;margin-top:6px">💡 유리(⚠️)는 위에 아무것도 얹지 말고, 중량(⬛)은 바닥에. 빈틈이 많으면 항해 중 흔들려요.</div>`
@@ -353,7 +374,7 @@ let selectedP=null;        // 선택된 화물 (회전/삭제 대상)
 function setNdc(x,y){ const r=canvas.getBoundingClientRect(); ndc.x=((x-r.left)/r.width)*2-1; ndc.y=-((y-r.top)/r.height)*2+1; ray.setFromCamera(ndc,camera); }
 function pickCargo(x,y){ setNdc(x,y); const h=ray.intersectObjects(placed.map(p=>p.mesh),true)[0]; return h?ownerOf(h.object):null; }
 function floorCell(x,y){ setNdc(x,y); const h=ray.intersectObjects([floorPlate,...placed.map(p=>p.mesh)],true)[0]; if(!h)return null;
-  return { i:Math.floor(h.point.x-OX*CELL), j:Math.floor(h.point.z-OZ*CELL), pt:h.point }; }
+  return { i:Math.floor((h.point.x-OX)/CELLX), j:Math.floor((h.point.z-OZ)/CELLZ), pt:h.point }; }
 function selectP(p){ if(selectedP) highlight(selectedP,false); selectedP=p; if(p){ highlight(p,true); flash(`선택: ${TYPES[p.type].icon} ${TYPES[p.type].name} — 드래그로 이동, ↻ 회전, ✕ 제거`); } }
 
 function onDown(x,y){ dX=x;dY=y;lastX=x;lastY=y;moved=false;
@@ -364,7 +385,7 @@ function onMove(x,y){
   if(!moved && Math.abs(x-dX)+Math.abs(y-dY)>5) moved=true;
   if(mode==='down' && moved){ mode = grabP ? 'drag' : 'orbit'; if(mode==='drag'){ selectP(grabP); setOcc(grabP,null); } }
   if(mode==='orbit'){ camYaw-=(x-lastX)*0.006; camPitch+=(y-lastY)*0.006; updateCam(); }
-  else if(mode==='drag' && grabP){ const fc=floorCell(x,y); if(fc){ grabP.mesh.position.set(OX*CELL+(fc.i+grabP.w/2)*CELL, CON.H+0.4, OZ*CELL+(fc.j+grabP.d/2)*CELL); } }
+  else if(mode==='drag' && grabP){ const fc=floorCell(x,y); if(fc){ grabP.mesh.position.set(OX+(fc.i+grabP.w/2)*CELLX, CON.H+0.4, OZ+(fc.j+grabP.d/2)*CELLZ); } }
   lastX=x;lastY=y;
 }
 function onUp(x,y){
@@ -440,7 +461,7 @@ function pd(e){return Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.tou
 function updateHUD(){
   const cbm=placed.reduce((a,p)=>a+p.w*p.d*p.h,0);
   const remain=INV.filter(x=>!x.placed).length;
-  document.getElementById('score').innerHTML=`📦 적재 <b>${placed.length}/${INV.length}</b> · <b>${cbm}/20 CBM</b> · 🏗 핸들링 <b>${handCost}</b><br>남은 화물: ${remain}개 (골라 실으세요 · 🤖로 AI 시연)`;
+  document.getElementById('score').innerHTML=`📦 적재 <b>${placed.length}/${INV.length}</b> · <b>${cbmOf(cbm)} CBM</b> (적재율 ${Math.round(cbm/(CW*CD*CH)*100)}%) · 🏗 <b>${handCost}</b><br>남은 화물: ${remain}개 (골라 실으세요 · 🤖 AI 시연)`;
   // 화물 목록 — 클릭해서 선택, 배치된 건 흐리게
   document.getElementById('next').innerHTML=INV.map((item,idx)=>{
     const T=TYPES[item.type]; const cls=item.placed?'done':idx===curSel?'cur':'';
@@ -469,9 +490,13 @@ window.openInspector=(type)=>{
   if(insMesh) insS.remove(insMesh);
   insMesh=buildCargo(type,t.w,t.h,t.d); insS.add(insMesh);
   const maxd=Math.max(t.w,t.h,t.d); insC.position.set(0, t.h*0.15, maxd*2.5); insC.lookAt(0,0,0);
+  const sc = t.fragile?'#ecc94b':t.hazmat?'#e08a5a':t.heavy?'#e0705a':'#9de89a';
   document.getElementById('iinfo').innerHTML=
-    `<b>${t.icon} ${t.name}</b><br>규격 ${t.w}×${t.d}×${t.h} m · <b>${t.w*t.d*t.h} CBM</b><br>`+
-    `무게 등급 ${t.wt}${t.fragile?' · <span style="color:#ecc94b">⚠️ 취급주의(깨짐)</span>':''}${t.heavy?' · <span style="color:#e0705a">⬛ 중량물</span>':''}`;
+    `<b>${t.icon} ${t.name}</b><br>`+
+    `규격 ${(t.w*CELLX).toFixed(1)}×${(t.d*CELLZ).toFixed(1)}×${(t.h*CELLY).toFixed(1)} m · <b>${cbmOf(t.w*t.d*t.h)} CBM</b> · ${t.wt}t<br>`+
+    `상태 <b style="color:${sc}">${t.status}</b>`+
+    `${t.upright?' · ⬆️ 세워서':''}${t.hazmat?' · ☣️ 위험물':''}<br>`+
+    `<span style="color:#99a;font-size:12px">${t.desc}</span>`;
   document.getElementById('inspector').style.display='flex';
   insActive=true; insAuto=true; insYaw=0.6; insPitch=0.35; sizeIns();
 };
@@ -496,7 +521,7 @@ renderer.setAnimationLoop(()=>{
   // 항해 롤링
   if(rolling>0){ rolling-=1/60; t+=0.08; con.rotation.z=Math.sin(t)*0.09; con.rotation.x=Math.sin(t*0.7)*0.05; if(rolling<=0){con.rotation.z=0;con.rotation.x=0;} }
   // 🤖 리플레이 낙하 연출
-  for(const p of placed){ if(p.fall>0){ p.mesh.position.y=(0.06+(p.k+p.h/2)*CELL)+p.fall; p.fall*=0.8; if(p.fall<0.02){ p.fall=0; p.mesh.position.y=0.06+(p.k+p.h/2)*CELL; } } }
+  for(const p of placed){ if(p.fall>0){ p.mesh.position.y=(0.06+(p.k+p.h/2)*CELLY)+p.fall; p.fall*=0.8; if(p.fall<0.02){ p.fall=0; p.mesh.position.y=0.06+(p.k+p.h/2)*CELLY; } } }
   renderer.render(scene,camera);
   // 🔍 인스펙터 렌더 (열렸을 때만)
   if(insActive && insMesh){ if(insAuto) insYaw+=0.008; insMesh.rotation.y=insYaw; insMesh.rotation.x=insPitch; insR.render(insS,insC); }
