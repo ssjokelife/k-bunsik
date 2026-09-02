@@ -239,6 +239,7 @@ const STAGES = [
     ] },
 ];
 const SIM=/[?&]sim/.test(location.search);   // 벤치마크 모드 — 유저 저장과 격리(메모리 진행)
+const TRAIN=/[?&]train/.test(location.search);   // 교육 과제 모드 — 출항=제출, AI 솔버 숨김
 let progress; if(SIM){ progress={cleared:0,cash:0}; } else { try{ progress=JSON.parse(localStorage.getItem('cargo_progress')||'{"cleared":0,"cash":0}'); }catch(e){ progress={cleared:0,cash:0}; } }
 // 🎓 커리어·재무 메타 (본편 = 콘솔사 신입사원)
 progress.savings=progress.savings??0; progress.rankIdx=progress.rankIdx??0; progress.certs=progress.certs??{};
@@ -393,7 +394,7 @@ window.renderStageSelect=()=>{
 };
 window.backToStages=()=>{ if(replayTimer) return; renderStageSelect(); };
 window.startStage=(i)=>{
-  if(i>progress.cleared) return;
+  if(i>progress.cleared && !TRAIN) return;   // 교육모드는 아무 케이스나 배정 가능
   curStageIdx=i; curStage=STAGES[i];
   applyContainerSpec(curStage.con); buildContainer();
   document.getElementById('stageSelect').style.display='none';
@@ -595,6 +596,7 @@ const SEA_NAME=['근해(잔잔)','중거리(보통)','원양(거친 롤링)'];
 window.depart=()=>{
   if(departed) return;
   if(!placed.length){ flash('화물을 먼저 실으세요!'); return; }
+  if(TRAIN){ try{ if(window.parent&&window.parent.wsSubmit) window.parent.wsSubmit(); }catch(e){} flash('📤 제출 완료 — 채점 중…'); return; }
   departed=true; doorTarget=0;   // 문 닫기
   const sea=curStage?LANES[curStage.to].sea:1;
   flash(`⚓ 출항! ${curStage?'부산→'+curStage.to+' ':''}🌊 ${SEA_NAME[sea]} 항해 중…`);
@@ -962,11 +964,58 @@ window.wsSimulate=(idx, acc, opts)=>{
   window.wsMods=savedMods; clearAll();
   return res;
 };
+// ═══ 🎓 교육 과제 채점 (제출 캡처 · 공정 채점 N회평균 · 모범답안 · 리플레이) ═══
+window.wsCaptureSubmission=()=>{ if(!curStage) return null;
+  return { idx:curStageIdx, to:curStage.to, nego:negoActive, accepted:[...accepted],
+    placements: placed.map(p=>({type:p.type,i:p.i,j:p.j,k:p.k,rot:p.rot,lashed:!!p.lashed,whoi:p.whoi})) }; };
+function placeLayout(sub){   // 스테이지 세팅 + 제출 레이아웃 재현(바닥부터), cbmUsed 반환
+  curStageIdx=sub.idx; curStage=STAGES[sub.idx];
+  applyContainerSpec(curStage.con); buildContainer();
+  negoActive=!!sub.nego; accepted=new Set(sub.accepted); clearAll();
+  sub.placements.slice().sort((a,b)=>a.k-b.k).forEach(pl=>{ const p=place(pl.type,pl.rot,pl.i,pl.j); if(p){ p.lashed=!!pl.lashed; p.whoi=pl.whoi; } });
+  return placed.reduce((a,p)=>a+p.w*p.d*p.h,0);
+}
+function scoreNAvg(cbmUsed,N){   // 같은 레이아웃을 N회 항해시켜 기대값(랜덤 손상 평균)
+  let mSum=0,dSum=0,pass=0,starSum=0; const pen={claims:0,overFine:0,balFine:0,dgFine:0,rollFee:0,lateFine:0,spoiled:0};
+  const sea=LANES[curStage.to].sea, skewed=Math.abs(balanceState().lr)>0.32, shakeP=0.30+sea*0.16+(skewed?0.15:0);
+  for(let n=0;n<N;n++){ placed.forEach(p=>{p.damaged=false;p.spoiled=false;}); judgeDamage(shakeP);
+    const S=computeSettleCore(cbmUsed); mSum+=S.margin; dSum+=placed.filter(p=>p.damaged).length; if(S.pass)pass++; starSum+=S.stars;
+    for(const k in pen) pen[k]+=(k==='spoiled'?S.spoiled:S[k]); }
+  placed.forEach(p=>{p.damaged=false;p.spoiled=false;});
+  const g=curStage.goal, RT=Math.round(placed.reduce((a,p)=>a+rtOf(p.type),0)*10)/10;
+  for(const k in pen) pen[k]=Math.round(pen[k]/N*10)/10;
+  return { expMargin:Math.round(mSum/N), dmgRate:Math.round(dSum/N*10)/10, passRate:Math.round(pass/N*100), expStars:Math.round(starSum/N*10)/10,
+    fillPct:Math.round(cbmUsed/(CW*CD*CH)*100), placedRT:RT, target:g.margin, maxDmg:g.maxDmg,
+    placed:placed.length, invCount:INV.length, rollover:INV.length-placed.length, pen };
+}
+window.wsScoreLayout=(sub,N)=>{ const cbm=placeLayout(sub); const r=scoreNAvg(cbm,N||30); clearAll(); return r; };
+window.wsModelLayout=(idx)=>{   // 모범답안 = 실속파(온도인식·가치밀도·여유) 부킹 + 솔버 적재
+  const info=window.wsStageInfo(idx);
+  let bs=info.reefer?info.bookings.filter(b=>!b.flags.frozen):info.bookings.slice();
+  bs.sort((a,b)=>(b.rt/b.cbm)-(a.rt/a.cbm)); let c=0,acc=[]; const lim=info.cap*0.9;
+  for(const b of bs){ if(c+b.cbm<=lim){ acc.push(b.bi); c+=b.cbm; } }
+  curStageIdx=idx; curStage=STAGES[idx]; applyContainerSpec(curStage.con); buildContainer();
+  negoActive=false; accepted=new Set(acc); clearAll();
+  const plan=solveOptimal();
+  for(const s of plan){ const p=place(s.type,s.rot,s.i,s.j); if(p){ const inv=INV[s.idx]; if(inv){inv.placed=true;p.whoi=inv.whoi;} } }
+  const sub=window.wsCaptureSubmission(); clearAll(); return sub;
+};
+window.wsReplayLayout=(sub)=>{
+  if(replayTimer) return;
+  curStageIdx=sub.idx; curStage=STAGES[sub.idx]; applyContainerSpec(curStage.con); buildContainer();
+  document.getElementById('stageSelect').style.display='none'; document.getElementById('modal').style.display='none';
+  negoActive=!!sub.nego; accepted=new Set(sub.accepted); clearAll(); resetView();
+  const sorted=sub.placements.slice().sort((a,b)=>a.k-b.k); let i=0;
+  flash('📺 모범 답안 리플레이 — 어떻게 실었는지 보세요');
+  replayTimer=setInterval(()=>{ if(i>=sorted.length){ clearInterval(replayTimer); replayTimer=null; flash('모범 답안 재생 완료'); return; }
+    const pl=sorted[i++]; const p=place(pl.type,pl.rot,pl.i,pl.j); if(p){ p.lashed=!!pl.lashed; p.whoi=pl.whoi; p.fall=2.6; } updateHUD(); }, 320);
+};
 window.wsCargoName=(t)=>TYPES[t]?TYPES[t].name:t;
 window.wsCargoIcon=(t)=>TYPES[t]?TYPES[t].icon:'📦';
 
 renderStageSelect();   // 🚢 시작은 스테이지 선택 화면부터
-if(!progress.introSeen) showIntro();   // 첫 방문 온보딩
+if(TRAIN){ document.querySelectorAll('button').forEach(b=>{ if((b.getAttribute('onclick')||'').includes('aiDemo')) b.style.display='none'; }); }   // 교육모드: AI 솔버 숨김
+if(!progress.introSeen && !TRAIN) showIntro();   // 첫 방문 온보딩
 let t=0;
 renderer.setAnimationLoop(()=>{
   // 문

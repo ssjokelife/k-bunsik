@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🎓 콘솔사 사원 교육 콘솔 — 방과후 스튜디오</title>
+<style>
+  *{box-sizing:border-box;} html,body{margin:0;height:100%;overflow:hidden;background:#0f141c;color:#e6ecf3;font-family:'Malgun Gothic','Segoe UI',sans-serif;}
+  #top{height:40px;display:flex;align-items:center;gap:10px;padding:0 14px;background:linear-gradient(#0b1a2e,#0d2038);border-bottom:1px solid #06101f;font-size:13px;}
+  #top b{color:#7fc0ff;} .sp{flex:1;}
+  #top input{background:#0c1826;border:1px solid #26405c;color:#e6ecf3;border-radius:6px;padding:5px 8px;font-size:12.5px;width:120px;}
+  #main{position:absolute;top:40px;left:0;right:0;bottom:0;display:flex;}
+  #left{width:400px;flex:none;border-right:1px solid #1c2634;overflow:auto;padding:14px;}
+  #right{flex:1;position:relative;background:#000;} #right iframe{width:100%;height:100%;border:0;}
+  @media(max-width:820px){ #main{flex-direction:column;} #left{width:auto;height:46%;border-right:0;border-bottom:1px solid #1c2634;} #right{height:54%;} }
+  h2{font-size:16px;margin:0 0 8px;} .muted{color:#8fa3bd;font-size:12px;}
+  select,.btn{font-family:inherit;}
+  select{background:#0c1826;border:1px solid #26405c;color:#e6ecf3;border-radius:7px;padding:8px;font-size:13px;width:100%;}
+  .btn{background:#2f6fd0;color:#fff;border:0;border-radius:8px;padding:9px 15px;font-size:13.5px;cursor:pointer;margin:6px 4px 0 0;}
+  .btn.alt{background:#3a4657;} .btn.go{background:#e8734f;} .btn:disabled{opacity:.5;cursor:default;}
+  .mail{background:#fff;color:#222;border-radius:8px;padding:12px 14px;margin:10px 0;font-size:12.5px;line-height:1.7;}
+  .mail .hd{border-bottom:1px solid #e4e4e4;padding-bottom:7px;margin-bottom:8px;} .mail .hd b{font-size:13px;} .mail .hd .a{color:#888;font-size:11px;}
+  .tag{display:inline-block;font-size:10px;padding:1px 7px;border-radius:9px;margin:2px 3px 0 0;background:#eef;color:#334;}
+  .card{background:#161d29;border:1px solid #263243;border-radius:10px;padding:12px 14px;margin:10px 0;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin:6px 0;} th,td{border:1px solid #26303f;padding:6px 8px;text-align:center;} th{background:#1c2635;color:#bcd0e8;}
+  td.k{text-align:left;color:#9fb0c8;} .pos{color:#6bd08a;} .neg{color:#e0705a;} .win{color:#ffd766;font-weight:bold;}
+  .fb{background:#12324a;border-left:4px solid #2f9be0;border-radius:8px;padding:9px 12px;margin:7px 0;font-size:12.5px;}
+  .fb.warn{background:#3a2418;border-left-color:#e0894f;} .fb.good{background:#16351f;border-left-color:#4caf50;}
+  .lb .row{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid #1e2836;}
+  .badge{display:inline-block;background:#22303f;border-radius:10px;padding:1px 8px;font-size:11px;margin-left:4px;}
+  code{background:#0c1826;padding:1px 5px;border-radius:4px;font-size:11px;}
+</style>
+</head>
+<body>
+<div id="top">
+  <b>🎓 콘솔사 사원 교육 콘솔</b><span class="muted">과제 모드</span>
+  <span class="sp"></span>
+  <span class="muted">교육생</span><input id="who" value="김신입" maxlength="10">
+  <span class="muted" id="engine">엔진 로딩…</span>
+</div>
+<div id="main">
+  <div id="left">
+    <h2>👨‍🏫 관리자 · 과제 배정</h2>
+    <div class="muted">고객 이메일(케이스)을 선택해 배정하면, 교육생이 오른쪽에서 풀고 <b>⚓ 출항 = 제출</b>합니다.</div>
+    <select id="caseSel"></select>
+    <button class="btn go" onclick="assign()">📩 이 케이스 배정</button>
+    <button class="btn alt" onclick="retry()">↻ 다시 풀기</button>
+    <div id="brief"></div>
+    <div id="report"></div>
+  </div>
+  <div id="right"><iframe id="game" src="cargo.html?train=1" title="적재 작업"></iframe></div>
+</div>
+
+<script>
+function game(){ return document.getElementById('game').contentWindow; }
+function ready(){ try{return !!game().wsScoreLayout;}catch(e){return false;} }
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const N=40;   // 공정 채점: 항해 40회 평균(기대값)
+
+// 관리자가 낼 수 있는 케이스(=고객 이메일 + 스테이지). rank=대상 직급/역량
+const CASES=[
+  {idx:0, rank:'신입', skill:'적입 기본·무손상', from:'한빛무역 김영수', addr:'ys.kim@hanbit.com', subj:'[부킹요청] 부산→상하이 LCL',
+   tags:['⚠️파손','⏰마감'], brief:'상하이행 LCL입니다. 카톤·<b>판유리(상단 적재 금지)</b>·팔레트·톤백·IBC, 삼진화학 <b>위험물 드럼</b> 포함. 여러 화주라 다 못 실어요 — 고R.T 위주로 골라 무손상으로. 마감 임박.'},
+  {idx:1, rank:'대리', skill:'중량 균형·부킹', from:'대양상사 무역부', addr:'trade@daeyang.com', subj:'[부킹요청] 부산→싱가포르 40ft',
+   tags:['☣️위험물','🔩중량'], brief:'40ft 대형. 기계·IBC <b>중량물 다수</b> — 무게를 <b>좌우·앞뒤 고르게</b>(전복 방지). 위험물 격리 유의. 손상 1개까지 허용, 꽉 채울수록 마진↑.'},
+  {idx:2, rank:'대리', skill:'냉동 온도관리', from:'신선물류 콜드체인', addr:'cold@ssmulyu.co.kr', subj:'[냉장/냉동] 부산→도쿄 리퍼 — 온도 엄수',
+   tags:['❄️냉장','⏰마감'], brief:'리퍼는 <b>설정온도 하나뿐</b> — 냉동(-18℃)과 냉장(+4℃)을 <b>섞으면 청과가 동해(전량 클레임)</b>. 신선물류=냉장, 오션델리·대양수산·한류수산=냉동. <b>한 온도만</b> 골라 무손상.'},
+  {idx:3, rank:'과장', skill:'원양·중량초과 관리', from:'글로벌테크 물류', addr:'logi@globaltech.com', subj:'[부킹요청] 부산→LA 40HC (태평양)',
+   tags:['🔩중량','☣️위험물'], brief:'원양이라 <b>롤링 강함</b> — 라싱·안정. 초중량 다수(<b>중량초과 26t 주의</b>). 원양은 R.T 단가 높아 잘 채우면 크게 법니다. 손상 1개 이내.'},
+  {idx:4, rank:'과장', skill:'까다로운 혼적', from:'정밀산업 수출팀', addr:'export@jsindustry.co.kr', subj:'[부킹요청] 부산→두바이 · 판유리·중량물',
+   tags:['⚠️파손','🔩중량','☣️위험물'], brief:'<b>판유리 3 + 기계·강관</b>이라 난이도 최상. 판유리 <b>맨 위</b>·중량 <b>바닥</b>·위험물 격리. 무손상(마진 25만+).'},
+  {idx:5, rank:'팀장', skill:'대형 종합', from:'한바다해운 콘솔데스크', addr:'consol@hanbada.co.kr', subj:'[부킹요청] 부산→로테르담 (유럽·최종)',
+   tags:['🔩중량','⚠️파손','☣️위험물'], brief:'최장거리·최고 R.T($160). 대형 혼합(기계·IBC·강관·판유리·위험물·톤백). 원양 롤링 강함 — 라싱·균형 필수. 최적 화주 조합으로 마진 200만+.'},
+];
+let curCase=null, lastModel=null;
+
+function fillCases(){ document.getElementById('caseSel').innerHTML=CASES.map((c,i)=>`<option value="${i}">[${c.rank}] ${c.subj} · ${c.skill}</option>`).join(''); }
+function assign(){ if(!ready()) return; const i=+document.getElementById('caseSel').value; curCase=CASES[i];
+  document.getElementById('report').innerHTML='';
+  renderBrief(); game().startStage(curCase.idx); }
+function retry(){ if(curCase&&ready()){ document.getElementById('report').innerHTML=''; game().startStage(curCase.idx); } }
+function renderBrief(){ const c=curCase;
+  document.getElementById('brief').innerHTML=`<div class="mail"><div class="hd"><b>${c.subj}</b><br><span class="a">보낸사람: ${c.from} &lt;${c.addr}&gt;</span></div>
+    ${c.tags.map(t=>`<span class="tag">${t}</span>`).join('')}<br><br>${c.brief}</div>
+    <div class="muted">🎯 대상 직급: <b>${c.rank}</b> · 역량: ${c.skill}<br>오른쪽에서 부킹→적입 후 <b>⚓ 출항</b>으로 제출하세요. (교육 모드: AI 솔버 없음)</div>`;
+}
+
+// 게임에서 ⚓출항 → 제출
+window.wsSubmit=()=>{
+  if(!curCase||!ready()) return;
+  const g=game(), sub=g.wsCaptureSubmission();
+  if(!sub||!sub.placements.length){ document.getElementById('report').innerHTML='<div class="card neg">화물을 실은 뒤 제출하세요.</div>'; return; }
+  document.getElementById('report').innerHTML='<div class="card muted">⏳ 40회 항해 평균으로 공정 채점 중…</div>';
+  setTimeout(()=>{
+    const you=g.wsScoreLayout(sub,N);
+    const model=g.wsModelLayout(sub.idx); lastModel=model;
+    const ms=g.wsScoreLayout(model,N);
+    saveLB(sub.idx, document.getElementById('who').value||'익명', you);
+    renderReport(sub, you, model, ms);
+  }, 30);
+};
+
+function renderReport(sub, you, model, ms){
+  const passYou=you.passRate>=100 || (you.passRate>0 && you.dmgRate<= you.maxDmg && you.expMargin>=you.target);
+  const win = you.expMargin>=ms.expMargin;
+  const row=(k,y,m,better)=>`<tr><td class="k">${k}</td><td class="${better(y,m)?'win':''}">${y}</td><td>${m}</td></tr>`;
+  let html=`<div class="card"><h2>🧾 채점 리포트 <span class="muted">(항해 ${N}회 평균)</span></h2>
+    <div class="muted">목표: 마진 <b>${you.target}만+</b> · ${you.maxDmg===0?'무손상':'손상 '+you.maxDmg+' 이내'} · 통과율(내 제출) <b class="${you.passRate>=80?'pos':'neg'}">${you.passRate}%</b></div>
+    <table><tr><th>항목</th><th>내 제출</th><th>모범답안</th></tr>
+    ${row('기대 마진(만원)', you.expMargin, ms.expMargin, (y,m)=>y>=m)}
+    ${row('통과율(%)', you.passRate, ms.passRate, (y,m)=>y>=m)}
+    ${row('평균 손상(개)', you.dmgRate, ms.dmgRate, (y,m)=>y<=m)}
+    ${row('별점(기대)', you.expStars, ms.expStars, (y,m)=>y>=m)}
+    ${row('채움율(%)', you.fillPct, ms.fillPct, (y,m)=>Math.abs(y-m)<8?true:y>=m)}
+    ${row('적재 R.T', you.placedRT, ms.placedRT, (y,m)=>y>=m)}
+    ${row('롤오버(개)', you.rollover, ms.rollover, (y,m)=>y<=m)}
+    </table>
+    <div style="font-size:15px;margin-top:6px">${win?'<span class="win">🏆 모범답안 이상! 훌륭합니다.</span>':`모범 대비 <b class="neg">${ms.expMargin-you.expMargin}만</b> 부족`}</div>
+    <button class="btn" onclick="replayModel()">📺 모범 답안 리플레이</button>
+    <button class="btn alt" onclick="retry()">↻ 다시 풀기</button></div>`;
+  // 학습 피드백 (벌금·실수 원인)
+  html+=`<div class="card"><b>💡 학습 피드백</b>`;
+  const fbs=[];
+  if(you.pen.spoiled>0) fbs.push(['warn','🌡 <b>냉동+냉장 혼적</b>으로 청과가 얼었습니다(동해). 리퍼는 <b>한 온도만</b> 받으세요.']);
+  if(you.pen.dgFine>0) fbs.push(['warn','☣️ <b>위험물 격리 위반</b>. 드럼은 <b>바닥에</b> 두고 <b>위에 아무것도</b> 얹지 마세요.']);
+  if(you.pen.overFine>0) fbs.push(['warn','⚖ <b>중량 초과</b>. 무거운 화물을 너무 많이 받았습니다 — payload 한계를 넘겼어요.']);
+  if(you.pen.balFine>0) fbs.push(['warn','↔️ <b>편중적재</b>. 무게가 좌우로 쏠렸습니다(전복 위험) — 고르게 분산.']);
+  if(you.pen.claims>0 && you.pen.spoiled===0) fbs.push(['warn','⚠️ <b>파손 클레임</b>. 판유리는 맨 위, 벽·이웃 고정이나 🔒라싱으로 흔들림을 막으세요.']);
+  if(you.rollover>ms.rollover+1) fbs.push(['warn','📦 <b>과수락(롤오버)</b>. 못 실을 화물까지 받아 재작업비가 나왔습니다 — 용량에 맞게 선별.']);
+  if(you.fillPct < ms.fillPct-8) fbs.push(['warn','📉 <b>채움 부족</b>. 빈 공간은 "안 판 R.T"라 마진이 줄어요 — 고R.T로 더 채우세요.']);
+  if(fbs.length===0) fbs.push(['good','✅ 큰 실수 없이 깔끔하게 처리했습니다. 세부 최적화만 남았어요.']);
+  html+=fbs.map(([c,t])=>`<div class="fb ${c}">${t}</div>`).join('')+`</div>`;
+  html+=renderLB(sub.idx);
+  document.getElementById('report').innerHTML=html;
+}
+function replayModel(){ if(lastModel&&ready()) game().wsReplayLayout(lastModel); }
+
+// 로컬 리더보드(여러 명 제출 누적)
+function saveLB(idx,name,you){ const key='train_lb_'+idx; let a; try{a=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){a=[];}
+  a.push({name, margin:you.expMargin, stars:you.expStars, pass:you.passRate, t:Date.now()});
+  a.sort((x,y)=>y.margin-x.margin); a=a.slice(0,10); localStorage.setItem(key,JSON.stringify(a)); }
+function renderLB(idx){ let a; try{a=JSON.parse(localStorage.getItem('train_lb_'+idx)||'[]');}catch(e){a=[];}
+  if(!a.length) return '';
+  return `<div class="card lb"><b>🏅 제출 순위</b> <span class="muted">(이 케이스 · 기대 마진순)</span>`+
+    a.map((r,i)=>`<div class="row"><span>${['🥇','🥈','🥉'][i]||(i+1)+'.'} ${r.name}</span><span>${r.margin}만 <span class="badge">⭐${r.stars}</span> <span class="badge">통과 ${r.pass}%</span></span></div>`).join('')+`</div>`;
+}
+
+fillCases();
+(async()=>{ for(let i=0;i<80&&!ready();i++) await sleep(150);
+  document.getElementById('engine').textContent = ready()?'엔진 준비됨 ✅':'엔진 로딩 실패';
+  if(ready()){ document.getElementById('caseSel').value='0'; } })();
+</script>
+</body>
+</html>
