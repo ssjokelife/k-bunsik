@@ -144,23 +144,23 @@ function loadManifest(){ INV = (curStage? curStage.cargo : MANIFESTS[curCon]).ma
 
 // ═══ 📅 스테이지 (작은 포워더 선적 스케줄) ═══
 const STAGES = [
-  { when:'9월 3주차 (수) 출항', client:'한빛무역', con:'20gp', fee:150, goal:{maxDmg:0},
-    brief:'첫 의뢰입니다! 20ft 컨테이너 FCL — 이 화물을 <b>전부</b> 싣고 <b>무손상</b>으로 보내주세요. (벽·다른 화물에 붙여 쌓아야 흔들림이 없어요)',
+  { when:'9월 3주차 (수) 출항', client:'한빛무역', con:'20gp', to:'상하이', freight:1200, fx:1320, goal:{maxDmg:0},
+    brief:'첫 의뢰입니다! 부산→상하이 근거리, 20ft FCL — 화물을 <b>전부</b> 싣고 <b>무손상</b>으로. (벽·이웃에 붙여 쌓아야 흔들림이 없어요)',
     cargo:['carton','carton','carton','carton','pallet','pallet','crate','drum','drum','bigbag','glass'] },
-  { when:'9월 3주차 (토) 출항', client:'대양상사', con:'40gp', fee:300, goal:{maxDmg:1},
-    brief:'40ft FCL 큰 건입니다. 화물을 전부 싣고 손상 1개 이내로.',
+  { when:'9월 3주차 (토) 출항', client:'대양상사', con:'40gp', to:'싱가포르', freight:1750, fx:1350, goal:{maxDmg:1},
+    brief:'부산→싱가포르, 40ft FCL 큰 건. 화물을 전부 싣고 손상 1개 이내로.',
     cargo:['machine','ibc','pallet','pallet','crate','pipe','bigbag','bigbag','glass','glass','drum','drum','drum','carton','carton','carton','carton'] },
-  { when:'9월 4주차 (화) 출항', client:'신선물류', con:'20rf', fee:280, goal:{maxDmg:0},
-    brief:'❄️ 냉동 컨테이너 특수 건! 청과·냉동식품을 전부 싣고 <b>무손상</b>으로. 냉동은 실수가 안 됩니다.',
+  { when:'9월 4주차 (화) 출항', client:'신선물류', con:'20rf', to:'도쿄', freight:1500, fx:1310, goal:{maxDmg:0},
+    brief:'❄️ 부산→도쿄 냉동 특수 건! 청과·냉동식품 전량·<b>무손상</b>. 냉동은 실수가 안 됩니다 (전기료 별도).',
     cargo:['produce','produce','frozen','frozen','frozen','frozen','carton','carton','frozen'] },
-  { when:'9월 4주차 (금) 출항', client:'글로벌테크', con:'40hc', fee:420, goal:{maxDmg:1},
-    brief:'40ft 하이큐브 대량 선적. 천장이 높으니 위로도 쌓으세요 — 전량 적재, 손상 1개 이내.',
+  { when:'9월 4주차 (금) 출항', client:'글로벌테크', con:'40hc', to:'로스앤젤레스', freight:2700, fx:1390, goal:{maxDmg:1},
+    brief:'부산→LA 태평양 횡단, 40HC 대량. 운임이 크지만 환율도 높아요 — 전량, 손상 1개 이내.',
     cargo:['machine','ibc','ibc','pallet','pallet','crate','crate','pipe','pipe','bigbag','bigbag','glass','glass','glass','drum','drum','carton','carton','carton','carton'] },
-  { when:'10월 1주차 (수) 출항', client:'정밀산업', con:'20gp', fee:400, goal:{maxDmg:0},
-    brief:'까다로운 건입니다 — 깨지기 쉬운 판유리와 중량물이 많아요. 배치 실력이 시험대. 전량·무손상!',
+  { when:'10월 1주차 (수) 출항', client:'정밀산업', con:'20gp', to:'두바이', freight:2200, fx:1420, goal:{maxDmg:0},
+    brief:'부산→두바이, 까다로운 건 — 판유리·중량물이 많아요. 배치 실력이 시험대. 전량·무손상!',
     cargo:['glass','glass','glass','machine','ibc','pipe','drum','drum','carton','carton','bigbag'] },
-  { when:'10월 1주차 (토) 출항', client:'한바다해운', con:'40hc', fee:650, goal:{maxDmg:1},
-    brief:'🏆 최종 의뢰! 대형 혼합 화물을 하이큐브에 전부. 포워더의 진짜 실력을 보여줄 때입니다.',
+  { when:'10월 1주차 (토) 출항', client:'한바다해운', con:'40hc', to:'로테르담', freight:3500, fx:1465, goal:{maxDmg:1},
+    brief:'🏆 최종 — 부산→로테르담 유럽 원거리! 운임·환율 모두 최고. 대형 혼합 화물을 전부 실어 포워더의 실력을.',
     cargo:['machine','machine','ibc','ibc','pallet','pallet','pallet','crate','crate','pipe','pipe','bigbag','bigbag','glass','glass','glass','drum','drum','drum','carton','carton','carton','carton','carton'] },
 ];
 let progress; try{ progress=JSON.parse(localStorage.getItem('cargo_progress')||'{"cleared":0,"cash":0}'); }catch(e){ progress={cleared:0,cash:0}; }
@@ -289,8 +289,8 @@ window.renderStageSelect=()=>{
     const cleared=i<progress.cleared, cur=i===progress.cleared, C=CONTAINERS[s.con];
     return `<div class="stg ${cleared?'clr':cur?'cur':'lock'}" ${i<=progress.cleared?`onclick="startStage(${i})"`:''}>
       <div class="sh">${cleared?'✅':cur?'▶':'🔒'} Stage ${i+1} <span class="sc">${C.icon} ${C.name} FCL</span></div>
-      <div class="sw">${s.when} · ${s.client}</div>
-      <div class="sf">🎯 화물 ${s.cargo.length}개 전량 · ${s.goal.maxDmg===0?'무손상':'손상 '+s.goal.maxDmg+' 이내'} · 수수료 ${s.fee}만원</div></div>`;
+      <div class="sw">${s.when} · ${s.client} · 부산→${s.to}</div>
+      <div class="sf">🎯 화물 ${s.cargo.length}개 전량 · ${s.goal.maxDmg===0?'무손상':'손상 '+s.goal.maxDmg+' 이내'} · 운임 $${s.freight} (₩${s.fx})</div></div>`;
   }).join('');
   document.getElementById('stageSelect').style.display='flex';
 };
@@ -306,8 +306,8 @@ window.startStage=(i)=>{
     `<h2>📋 Stage ${i+1} — ${curStage.client}</h2>`+
     `<div style="font-size:13px;color:#666">${curStage.when} · ${C.icon} ${C.name} FCL</div><br>`+
     `${curStage.brief}<br><br>`+
-    `<div style="font-size:13px">🎯 목표: 화물 <b>${curStage.cargo.length}개 전량 적재</b> · ${curStage.goal.maxDmg===0?'<b>무손상</b>':'손상 '+curStage.goal.maxDmg+'개 이내'}<br>💰 운임 <b>${curStage.fee}만원</b> − 부대비용(THC·서류·할증·데드프레이트) = 순이익</div>`+
-    `<div style="font-size:11.5px;color:#888;margin-top:6px">💡 벽·이웃에 붙여 쌓으면 흔들림 없이 안전 — 안 되면 🔒라싱(12만/개). 꽉 채울수록 데드프레이트↓</div>`+
+    `<div style="font-size:13px">🎯 목표: 화물 <b>${curStage.cargo.length}개 전량 적재</b> · ${curStage.goal.maxDmg===0?'<b>무손상</b>':'손상 '+curStage.goal.maxDmg+'개 이내'}<br>🚢 부산→<b>${curStage.to}</b> · 운임 <b>$${curStage.freight}</b> (환율 ₩${curStage.fx}/$)<br>💵 USD비용(BAF·DG·데드) + 🇰🇷국내비용(THC·서류·훈증·라싱) 차감 → 순이익(원화)</div>`+
+    `<div style="font-size:11.5px;color:#888;margin-top:6px">💡 벽·이웃에 붙여 쌓으면 흔들림 없이 안전 — 안 되면 🔒라싱(12만/개). 꽉 채울수록 데드프레이트↓ · 환율 높을수록 원화 이익↑</div>`+
     `<button onclick="document.getElementById('modal').style.display='none'">🏗 작업 시작!</button>`;
   document.getElementById('modal').style.display='flex';
 };
@@ -466,27 +466,33 @@ function showResult(cbmUsed){
     const g=curStage.goal;
     const allLoaded = placed.length===INV.length;
     const pass = allLoaded && dmgList.length<=g.maxDmg;
-    // 💰 부대비용
-    const thc=CONTAINERS[curCon].thc, doc=10;
-    const dgN=placed.filter(p=>TYPES[p.type].hazmat).length, dg=dgN*8;
+    // 💱 손익 정산 (USD 운임/할증 + KRW 로컬비, 환율 환산)
+    const fx=curStage.fx, freight=curStage.freight;
+    const baf=Math.round(freight*0.18);                                   // USD 유류할증
+    const dgN=placed.filter(p=>TYPES[p.type].hazmat).length, dgUsd=dgN*50; // USD 위험물
+    const deadUsd=Math.round(freight*(1-rate)*0.2);                       // USD 데드프레이트
+    const usdCost=baf+dgUsd+deadUsd;
+    const thc=CONTAINERS[curCon].thc, doc=10;                             // KRW (만원)
     const woodN=placed.filter(p=>p.type==='crate'||p.type==='pallet').length, fum=woodN>0?15:0;
     const reefer=CONTAINERS[curCon].reefer?40:0;
     const lashN=placed.filter(p=>p.lashed).length, lash=lashN*12;
-    const dead=Math.round((1-rate)*curStage.fee*0.22);
-    const cost=thc+doc+dg+fum+reefer+lash+dead;
-    const net=curStage.fee-cost;
+    const krwCost=thc+doc+fum+reefer+lash;                               // 만원
+    const incomeKrw=freight*fx/10000;                                     // 운임 원화
+    const usdCostKrw=usdCost*fx/10000;
+    const net=Math.round(incomeKrw - usdCostKrw - krwCost);              // 순이익 만원
     let earned=0;
     if(pass && curStageIdx===progress.cleared){ progress.cleared++; progress.cash+=net; earned=net;
       try{ localStorage.setItem('cargo_progress',JSON.stringify(progress)); }catch(e){} }
     const last = curStageIdx+1>=STAGES.length;
-    const costLine = `THC ${thc} · 서류 ${doc}`+(dg?` · ☣️위험물 ${dg}`:'')+(fum?` · 🪵훈증 ${fum}`:'')+(reefer?` · ❄️전기 ${reefer}`:'')+(lash?` · 🔒라싱 ${lash}`:'')+(dead?` · 📉데드 ${dead}`:'');
+    const usdLine = `BAF $${baf}`+(dgUsd?` · ☣️DG $${dgUsd}`:'')+(deadUsd?` · 📉데드 $${deadUsd}`:'');
+    const krwLine = `THC ${thc} · 서류 ${doc}`+(fum?` · 🪵훈증 ${fum}`:'')+(reefer?` · ❄️전기 ${reefer}`:'')+(lash?` · 🔒라싱 ${lash}`:'');
     mB.innerHTML=
       `<h2>${pass?'✅ 선적 완료!':'❌ 목표 미달'}</h2>`+
-      `적재 <b>${placed.length}/${INV.length}개</b> · 손상 <b>${dmgList.length}개</b> (허용 ${g.maxDmg})<br><br>`+
+      `부산→${curStage.to} · 적재 <b>${placed.length}/${INV.length}개</b> · 손상 <b>${dmgList.length}개</b> (허용 ${g.maxDmg})<br><br>`+
       (pass
-        ? `<div style="font-size:13px;color:#666;text-align:left;line-height:1.7">💵 운임 +${curStage.fee}<br>➖ ${costLine}</div>`+
+        ? `<div style="font-size:12.5px;color:#666;text-align:left;line-height:1.7">💵 운임 <b>$${freight}</b> × ₩${fx} = +${Math.round(incomeKrw)}만<br>➖ USD비용 $${usdCost} (${usdLine}) → -${Math.round(usdCostKrw)}만<br>➖ 국내비용 -${krwCost}만 (${krwLine})</div>`+
           `<div style="font-size:22px;margin-top:6px">순이익 <b style="color:${net>=0?'#c05a46':'#b04040'}">${net>=0?'+':''}${net}만원</b></div>`+
-          `누적 수익 <b>${progress.cash}만원</b><br><br>`+
+          `<div style="font-size:11px;color:#999">환율 ₩${fx}/$ 적용</div>누적 수익 <b>${progress.cash}만원</b><br><br>`+
           (last?`<div style="font-size:17px;color:#c05a46">🏆 모든 선적 완수 — 포워더 성공!</div><br>`:`<button onclick="startStage(${curStageIdx+1})">▶ 다음 스테이지</button>`)
         : `<div style="color:#b04040;font-size:13.5px">${!allLoaded?`화물을 다 싣지 못했어요 (${placed.length}/${INV.length}) — 회전·재배치로 빈틈을 메우세요`:`손상이 많아요 (${dmgList.length} > ${g.maxDmg}) — 유리는 맨 위, 중량은 바닥, 벽·이웃에 붙이거나 🔒라싱`}</div><br>`+
           `<button onclick="retryStage()">🔄 다시 작업</button>`)+
