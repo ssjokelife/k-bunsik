@@ -27,16 +27,23 @@
   .label{text-align:center;font-size:12px;color:#9fb0c8;margin-top:5px;}
   .label b{color:#cfe0f4;}
   /* 줌 상태 */
-  body.zoomed #desk{gap:0;}
+  body.zoomed #desk{gap:0;padding:0;}
   body.zoomed .monitor:not(.active){opacity:0;pointer-events:none;position:absolute;transform:scale(.6);}
-  body.zoomed .monitor.active{width:min(96vw,1500px);}
+  body.zoomed .monitor.active{width:100vw;max-width:none;}
   body.zoomed .monitor.active .stand,body.zoomed .monitor.active .foot,body.zoomed .monitor.active .label{display:none;}
   body.zoomed .monitor.active .cover{display:none;}
-  body.zoomed .monitor.active .screen{aspect-ratio:auto;height:calc(100vh - 92px);}
-  #unzoom{position:fixed;top:40px;right:14px;z-index:50;display:none;background:#0d2038;color:#cfe4ff;border:1px solid #1d3a5c;
-    border-radius:9px;padding:8px 14px;font-size:13px;font-family:inherit;cursor:pointer;}
+  body.zoomed .monitor.active .bezel{padding:0;border-radius:0;background:#000;box-shadow:none;}
+  body.zoomed .monitor.active .screen{aspect-ratio:auto;height:calc(100vh - 34px);border-radius:0;}
+  body.zoomed #tbUser,body.zoomed #tbSave{display:none;}
+  #unzoom{position:fixed;top:4px;right:12px;z-index:50;display:none;background:#12385f;color:#cfe4ff;border:1px solid #2a5c8c;
+    border-radius:7px;padding:5px 12px;font-size:12.5px;font-family:inherit;cursor:pointer;}
   body.zoomed #unzoom{display:block;}
   button{font-family:inherit;cursor:pointer;}
+  /* 새 메일 알림 토스트 */
+  #toast{position:fixed;bottom:18px;right:18px;z-index:60;max-width:340px;background:#0d2038;color:#eaf2fb;
+    border:1px solid #1d5a8c;border-left:4px solid #2f9be0;border-radius:9px;padding:11px 14px;font-size:12.5px;
+    box-shadow:0 8px 26px rgba(0,0,0,.5);transform:translateX(120%);transition:transform .4s cubic-bezier(.3,1.2,.5,1);}
+  #toast.on{transform:translateX(0);}
 
   /* ══ 아웃룩풍 메일 클라이언트 ══ */
   #mail{position:absolute;inset:0;display:flex;flex-direction:column;background:#f3f2f1;color:#201f1e;font-size:13px;}
@@ -136,6 +143,7 @@
 </div>
 
 <button id="unzoom" onclick="unzoom()">⊟ 두 화면 보기</button>
+<div id="toast"></div>
 
 <script>
 const RANKS=['신입','대리','과장','팀장','부사장'];
@@ -196,7 +204,31 @@ const EMAILS=[
   {id:11,folder:'inbox',from:'박현우 팀장',addr:'hw.park@hanbada.co.kr',subj:'[주의] 클레임은 곧 신뢰 하락이다',tm:'금 08:30',unread:false,tags:[],
    body:`파손·동해 클레임이 나면 화주가 떠난다. 무손상 기록이 다음 부킹을 부른다.<br>
    급하다고 아무거나 받지 말고, <b>고R.T·저리스크</b> 위주로 골라라. 과욕(과수락)은 롤오버 비용만 낸다.<br><br>— 박현우`},
+  // ── 시간대별 다양한 업무 케이스 ──
+  {id:12,folder:'inbox',from:'유리코 CS팀',addr:'cs@yuriko.co.kr',subj:'[클레임] 판유리 파손 — 배상 협의 요청',tm:'화 16:20',unread:true,tags:['fr'],
+   body:`지난 선적건 판유리 2매가 도착지에서 파손 확인되었습니다. 배상 및 재선적 협의 부탁드립니다.<br><br>
+   앞으로는 <b>판유리를 반드시 맨 위·라싱</b> 처리해 주세요. 파손이 반복되면 거래를 재검토할 수밖에 없습니다.`},
+  {id:13,folder:'inbox',from:'동방식품 물류',addr:'logi@dongbang.com',subj:'[긴급] 추가 부킹 가능한가요? (마감 임박)',tm:'수 08:05',unread:true,tags:['dl'],
+   body:`갑자기 물량이 생겼습니다. 이번 콘솔에 <b>톤백 2개 추가</b> 실을 공간 있을까요?<br>
+   무리라면 다음 배로 넘겨도 됩니다만, 가능하면 부탁드립니다. 마감이 촉박합니다. 🙏`},
+  {id:14,folder:'inbox',from:'고려해운 스페이스팀',addr:'space@krline.com',subj:'[통보] 성수기 스페이스 부족 — 일부 롤오버 가능성',tm:'수 17:10',unread:true,tags:[],
+   body:`성수기로 선복이 타이트합니다. 마감 넘기면 <b>다음 배로 롤오버</b>될 수 있으니 적입을 서둘러 주세요.<br>
+   데드프레이트(미선적 공간)는 콘솔사 부담인 점 유의 바랍니다.`},
+  {id:15,folder:'inbox',from:'영업지원팀 이수진',addr:'sj.lee@hanbada.co.kr',subj:'[영업] 신규 화주 리드 — 화장품 수출사 (개척 요망)',tm:'목 09:00',unread:true,tags:[],
+   body:`전시회에서 만난 화장품 수출 중소기업 리드입니다. 소량 다품종(카톤 위주)이라 <b>LCL 단골</b>이 될 만합니다.<br>
+   무클레임·정시로 신뢰를 쌓으면 재의뢰가 붙습니다. 단가 협상은 과장급부터 가능해요.`},
+  {id:16,folder:'inbox',from:'부산세관 검사과',addr:'inspect@customs.go.kr',subj:'[검사지정] 위험물 컨테이너 적재검사 대상',tm:'목 13:45',unread:true,tags:['dg'],
+   body:`귀사 위험물 포함 건이 <b>적재검사 대상</b>으로 지정되었습니다. 격리기준 미준수 시 반출 보류됩니다.<br>
+   드럼 바닥 단 적재·위 적재 금지·식품 격리를 재확인해 주세요.`},
+  {id:17,folder:'inbox',from:'고려해운 운임팀',addr:'rate@krline.com',subj:'[공지] 유가 상승 — BAF 할증 인상 안내',tm:'금 10:30',unread:true,tags:[],
+   body:`국제 유가 상승으로 <b>BAF(유류할증)</b>가 인상됩니다. USD 부대비에 반영되며, 환율에 따라 원화 마진이 출렁일 수 있습니다.<br>
+   장거리(미주·유럽) 노선일수록 영향이 큽니다.`},
+  {id:18,folder:'inbox',from:'박현우 팀장',addr:'hw.park@hanbada.co.kr',subj:'[독촉] 이번 주 마감 임박 — 진행상황 보고',tm:'금 15:00',unread:true,tags:['dl'],
+   body:`이번 주 남은 콘솔 건 빨리 마무리하자. 미처리 건 있으면 오늘 중 적입 시작해라.<br>
+   채움율·무클레임 지표 보고 있다. 부사장 승진이 눈앞이야. 조금만 더.<br><br>— 박현우`},
 ];
+// 도착 시각(시뮬 분, 월08:00=0 · 하루 600분). 케이스 메일이 시간 흐름에 따라 도착
+const SCHED={1:0, 2:0, 3:35, 8:120, 6:150, 13:610, 4:200, 14:640, 5:360, 16:820, 7:660, 15:900, 12:520, 17:1210, 9:960, 18:1300, 10:1320, 11:1360};
 
 let curFolder='inbox', curMail=null, trashed=new Set();
 const FOLDER_OF=m=> m.from.includes('세관')?'customs': m.from.includes('해운')||m.from.includes('선사')||m.addr.includes('krline')?'carrier': (m.stage!=null||m.from.includes('무역')||m.from.includes('물류')||m.from.includes('화학')||m.from.includes('산업'))?'cargo':'inbox';
@@ -206,7 +238,7 @@ function inFolder(m){ if(trashed.has(m.id)) return curFolder==='trash'; if(curFo
 
 function renderList(){
   const cleared=(prog().cleared)??0;
-  const list=EMAILS.filter(inFolder);
+  const list=EMAILS.filter(m=>m.shown&&inFolder(m));
   document.getElementById('mlist').innerHTML=list.map(m=>{
     const tags=(m.tags||[]).map(t=>`<span class="tag ${t}">${({dg:'☣️위험물',rf:'❄️냉장',fr:'⚠️파손',hv:'🔩중량',dl:'⏰마감'})[t]}</span>`).join('');
     const prev=m.body.replace(/<[^>]+>/g,' ').slice(0,42);
@@ -215,7 +247,7 @@ function renderList(){
       <div class="subj">${m.subj}</div><div class="prev">${prev}…</div>
       ${tags?`<div class="tags">${tags}</div>`:''}</div>`;
   }).join('')||'<div style="padding:20px;color:#a19f9d;text-align:center">메일 없음</div>';
-  document.getElementById('cntInbox').textContent=EMAILS.filter(m=>!trashed.has(m.id)&&m.unread).length||'';
+  document.getElementById('cntInbox').textContent=EMAILS.filter(m=>m.shown&&!trashed.has(m.id)&&m.unread).length||'';
 }
 function openMail(id){
   const m=EMAILS.find(x=>x.id===id); if(!m) return; m.unread=false; curMail=id;
@@ -269,17 +301,31 @@ document.querySelectorAll('.cover').forEach(c=>c.addEventListener('click',e=>{
   zoom(c.closest('.monitor').id);
 }));
 
-// ── 상단바(진행상태 반영) + 시계 ──
+// ── ⏱ 시뮬 시계 + 메일 도착 스케줄러 ──
+EMAILS.forEach(m=>{ m.at=SCHED[m.id]??0; m.shown=(m.at<=0); });   // 초기 인박스는 조용히 노출
+let simMin=0; const SPEED=5;   // 실제 1초 = 5 시뮬분
+const DAYS=['월','화','수','목','금','월','화','수'];
+function clockStr(){ const day=Math.floor(simMin/600), mi=simMin%600, h=8+Math.floor(mi/60), m=mi%60;
+  return `${DAYS[day]||'월'} ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+let toastT; function toast(msg){ const el=document.getElementById('toast'); el.innerHTML=msg; el.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('on'),3600); }
+function reveal(m){ if(m.shown) return; m.shown=true; m.unread=true; toast(`📧 <b>새 메일</b> · ${m.from}<br>${m.subj}`); }
 function refresh(){
-  const p=prog(); const r=RANKS[p.rankIdx||0]||'신입';
+  const p=prog(), r=RANKS[p.rankIdx||0]||'신입';
   document.getElementById('tbUser').textContent=`👤 김신입 · ${r}`;
   document.getElementById('tbSave').textContent=`💰 저축 ${p.savings||0}만`;
-  const d=new Date(); document.getElementById('tbClock').textContent=
-    `${['일','월','화','수','목','금','토'][d.getDay()]} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-  if(curMail!=null){ const m=EMAILS.find(x=>x.id===curMail); if(m&&m.stage!=null) openMail(curMail); } // 잠금상태 갱신
-  else renderList();
+  document.getElementById('tbClock').textContent=`🗓 ${clockStr()}`;
+  if(curMail!=null){ const m=EMAILS.find(x=>x.id===curMail); if(m&&m.stage!=null){ openMail(curMail); return; } }
+  renderList();
 }
-setInterval(refresh,2000); window.addEventListener('focus',refresh);
+function tick(){
+  simMin+=SPEED;
+  let arrived=false;
+  EMAILS.forEach(m=>{ if(!m.shown && simMin>=m.at){ reveal(m); arrived=true; } });
+  const c=(prog().cleared)??0;   // 스테이지 클리어 시 다음 작업 메일 즉시 배정
+  EMAILS.forEach(m=>{ if(!m.shown && m.stage!=null && m.stage<=c){ reveal(m); arrived=true; } });
+  refresh();
+}
+setInterval(tick,1000); window.addEventListener('focus',refresh);
 renderList(); openMail(1); refresh();
 </script>
 </body>
