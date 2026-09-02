@@ -241,6 +241,7 @@ const STAGES = [
 let progress; try{ progress=JSON.parse(localStorage.getItem('cargo_progress')||'{"cleared":0,"cash":0}'); }catch(e){ progress={cleared:0,cash:0}; }
 // 🎓 커리어·재무 메타 (본편 = 콘솔사 신입사원)
 progress.savings=progress.savings??0; progress.rankIdx=progress.rankIdx??0; progress.certs=progress.certs??{};
+progress.stars=progress.stars??{}; progress.introSeen=progress.introSeen??false;
 const RANKS=['신입','대리','과장','팀장','부사장'];
 const SALARY=[220,300,420,600,900];   // 직급별 월 기본급(만원)
 const LIVING=150;                       // 월 생존비(부산 1인가구 실측)
@@ -375,12 +376,13 @@ window.renderStageSelect=()=>{
   document.getElementById('modal').style.display='none';
   document.getElementById('inspector').style.display='none';
   const rank=RANKS[progress.rankIdx], certList=Object.keys(progress.certs).filter(k=>progress.certs[k]).map(k=>CERTS[k].icon).join('');
-  document.getElementById('ssHeader').innerHTML=`👤 <b>${rank}</b> · 💰 저축 <b>${progress.savings}만</b> · 월급 ${SALARY[progress.rankIdx]}만 · 회사 마진 ${progress.cash}만${certList?` · 자격 ${certList}`:''}`;
-  document.getElementById('ssActions').innerHTML=`<button onclick="renderCerts()" style="font-size:12.5px;padding:7px 12px">📚 자기계발 (자격증)</button>`;
+  const totStars=STAGES.reduce((a,_,i)=>a+(progress.stars[i]||0),0);
+  document.getElementById('ssHeader').innerHTML=`👤 <b>${rank}</b> · 💰 저축 <b>${progress.savings}만</b> · 월급 ${SALARY[progress.rankIdx]}만 · <span style="color:#ecc94b">⭐ ${totStars}/18</span> · 회사 마진 ${progress.cash}만${certList?` · 자격 ${certList}`:''}`;
+  document.getElementById('ssActions').innerHTML=`<button onclick="renderCerts()" style="font-size:12.5px;padding:7px 12px">📚 자기계발</button> <button onclick="showHelp()" style="font-size:12.5px;padding:7px 12px">❓ 도움말</button>`;
   document.getElementById('stageList').innerHTML=STAGES.map((s,i)=>{
-    const cleared=i<progress.cleared, cur=i===progress.cleared, C=CONTAINERS[s.con];
+    const cleared=i<progress.cleared, cur=i===progress.cleared, C=CONTAINERS[s.con], st=progress.stars[i]||0;
     return `<div class="stg ${cleared?'clr':cur?'cur':'lock'}" ${i<=progress.cleared?`onclick="startStage(${i})"`:''}>
-      <div class="sh">${cleared?'✅':cur?'▶':'🔒'} Stage ${i+1} <span class="sc">${C.icon} ${C.name} LCL</span></div>
+      <div class="sh">${cleared?'✅':cur?'▶':'🔒'} Stage ${i+1} <span class="sc">${C.icon} ${C.name} LCL</span>${st?` <span style="color:#ecc94b;float:right">${'★'.repeat(st)}</span>`:''}</div>
       <div class="sw">${s.when} · ${s.client} · 부산→${s.to}</div>
       <div class="sf">🎯 마진 ${s.goal.margin}만+ · ${s.goal.maxDmg===0?'무손상':'손상 '+s.goal.maxDmg+' 이내'} · 화주 ${s.bookings.length}곳 · $${LANES[s.to].rate}/R.T · 박스 $${LANES[s.to].box[s.con]}</div></div>`;
   }).join('');
@@ -414,6 +416,19 @@ window.renderCerts=()=>{
 };
 window.buyCert=(k)=>{ const c=CERTS[k]; if(hasCert(k)||progress.savings<c.cost) return; progress.savings-=c.cost; progress.certs[k]=true; saveProgress(); renderCerts(); };
 window.toggleNego=()=>{ negoActive=!negoActive; renderBooking(); };
+// ═══ 📖 인트로 / 도움말 ═══
+const RULES_HTML=
+  `<div style="text-align:left;font-size:12.5px;line-height:1.75">`+
+  `<b>당신은 부산 신항 콘솔사의 신입사원.</b> 여러 화주의 소량 화물(LCL)을 한 컨테이너에 모아(혼재) 무손상으로 내보내면 마진이 남습니다.<br><br>`+
+  `<b>① 📑 부킹</b> — 화주 오퍼(합계가 박스보다 많음) 중 <b>골라 수락</b>. R.T=max(중량t, 부피CBM)로 청구.<br>`+
+  `<b>② 🏗 적입</b> — 바닥 탭으로 놓고, 드래그로 이동, ↻회전. 꽉 채울수록 마진↑(빈칸=놓친 R.T).<br>`+
+  `<b>③ 📏 혼재 규칙</b> — ⚠️파손품 맨위 · 🏋중량 바닥 · ↔️무게 좌우 균형(전복) · ☣️위험물 바닥·위 비우기 · 🌡리퍼는 한 온도만.<br>`+
+  `<b>④ ⚓ 출항·검수</b> — 원양일수록 롤링↑. 벽·이웃 고정이나 🔒라싱으로 흔들림 방지. 도착지에서 화주별 검수.<br>`+
+  `<b>⑤ 🧾 정산·승진</b> — Σ(R.T×요율)−박스−부대비−클레임=마진. 월급+성과급−생존비=저축. 클리어로 승진(신입→부사장).<br>`+
+  `<b>⑥ 📚 자기계발</b> — 저축으로 자격증 구매 → 벌금·비용↓. 과장↑이면 🤝단가협상(+12%, 이탈 위험).</div>`;
+window.showHelp=()=>{ document.getElementById('modalBody').innerHTML=`<h2>❓ 콘솔 업무 가이드</h2>`+RULES_HTML+`<button onclick="renderStageSelect()">← 스케줄로</button>`; document.getElementById('modal').style.display='flex'; };
+window.showIntro=()=>{ document.getElementById('modalBody').innerHTML=`<h2>🚢 방과후 콘솔 — 신입사원 편</h2>`+RULES_HTML+`<button onclick="closeIntro()">🏗 첫 출근!</button>`; document.getElementById('modal').style.display='flex'; };
+window.closeIntro=()=>{ progress.introSeen=true; saveProgress(); renderStageSelect(); };
 // ═══ 📑 부킹 화면 — 화주 오퍼 중 골라 담기 (합계 > 박스) ═══
 window.toggleBooking=(bi)=>{ if(accepted.has(bi)) accepted.delete(bi); else accepted.add(bi); renderBooking(); };
 function renderBooking(){
@@ -672,6 +687,14 @@ function showResult(cbmUsed){
       payslip={salary,bonus,net,promoted: progress.rankIdx>oldRank? RANKS[progress.rankIdx]:null};
       saveProgress();
     }
+    // ⭐ 별점 — ①목표달성 ②무손상 ③완벽운영(무손상·롤오버0·벌금0·마진 목표1.6배↑)
+    let stars=0, newBest=false;
+    if(pass){ stars=1;
+      if(dmgList.length===0) stars=2;
+      if(dmgList.length===0 && rollover===0 && (balFine+dgFine+overFine)===0 && margin>=g.margin*1.6) stars=3;
+      const prev=progress.stars[curStageIdx]||0; if(stars>prev){ progress.stars[curStageIdx]=stars; newBest=true; saveProgress(); }
+    }
+    const starStr=s=>'★'.repeat(s)+'☆'.repeat(3-s);
     const last = curStageIdx+1>=STAGES.length;
     const costBits=[reefer?`❄️전기 ${reefer}`:'', lash?`🔒라싱 ${lash}`:'', claims?`⚠️클레임 ${claims}${spoiled?`(동해 ${spoiled})`:''}`:'', overFine?`⚖중량초과 ${overFine}`:'', balFine?`↔️편중 ${balFine}`:'', dgFine?`☣️격리위반 ${dgFine}`:'', rollFee?`📦롤오버 ${rollFee}`:''].filter(Boolean).join(' · ');
     // 🔍 개장 검수 — 화주별 결과 (무손상/파손/롤오버)
@@ -688,9 +711,14 @@ function showResult(cbmUsed){
       (pass
         ? `<div style="font-size:12px;color:#666;text-align:left;line-height:1.7">💵 운임 <b>${placedRT}R.T × $${Math.round(usdRate)}${negoActive?'🤝':''} = $${incomeUSD}</b> − 박스 $${box}${dgUsd?` − ☣️DG $${dgUsd}`:''} = $${usdNet} × ₩${fx} → ${Math.round(usdNetKrw)}만<br>➕ 부대마진 CFS·THC ${opsMargin}만 · 서류 ${doc}만(B/L ${blCount}건)${costBits?`<br>➖ ${costBits}`:''}</div>`+
           `<div style="font-size:22px;margin-top:6px">혼재 마진 <b style="color:${margin>=0?'#c05a46':'#b04040'}">${margin>=0?'+':''}${margin}만원</b> <span style="font-size:12px;color:#999">/ 목표 ${g.margin}만</span></div>`+
+          `<div style="font-size:19px;color:#ecc94b;letter-spacing:2px">${starStr(stars)} <span style="font-size:11px;color:#999">${newBest?'🎉 최고 기록!':''}${stars<3?' · ⭐3=무손상·롤오버0·무벌금·마진 1.6배':''}</span></div>`+
           `<div style="font-size:11px;color:#999">💡 고R.T 화주를 골라 꽉 채울수록 마진↑</div>`+
           (payslip?`<div style="font-size:12px;background:rgba(120,140,180,.14);border-radius:9px;padding:8px;margin:7px 0;text-align:left">🧾 <b>이번 달 급여명세</b> (${RANKS[progress.rankIdx]})<br>월급 ${payslip.salary} + 성과급 ${payslip.bonus} − 생존비 ${LIVING} = <b style="color:${payslip.net>=0?'#c05a46':'#b04040'}">저축 ${payslip.net>=0?'+':''}${payslip.net}만</b> · 누적 저축 <b>${progress.savings}만</b>${payslip.promoted?`<br>🎉 <b>${payslip.promoted}</b>(으)로 승진!`:''}</div>`:'')+
-          (last?`<div style="font-size:17px;color:#c05a46">🏆 모든 선적 완수 — 콘솔사 성공!</div><br>`:`<button onclick="startStage(${curStageIdx+1})">▶ 다음 스테이지</button>`)
+          (last?(()=>{ const tot=STAGES.reduce((a,_,i)=>a+(progress.stars[i]||0),0), cIcons=Object.keys(progress.certs).filter(k=>progress.certs[k]).map(k=>CERTS[k].icon).join('')||'없음';
+            return `<div style="font-size:15px;color:#c05a46;font-weight:bold;margin-top:4px">🏆 본편 완주 — ${RANKS[progress.rankIdx]} 등극!</div>`+
+            `<div style="font-size:12px;color:#667;margin:6px 0;line-height:1.7">누적 저축 <b>${progress.savings}만</b> · 별점 <b>${tot}/18</b> ${starStr(Math.round(tot/6))} · 자격 ${cIcons} · 회사 마진 ${progress.cash}만</div>`+
+            `<div style="font-size:12px;color:#8a7;background:rgba(120,140,180,.12);border-radius:9px;padding:9px;margin:6px 0;text-align:left;line-height:1.7">"부산 신항의 작은 콘솔사에서, 당신은 신입에서 부사장이 됐다. 하지만 마음 한켠엔 늘 <b>'내 회사'</b>라는 꿈이 있었다…"<br><span style="color:#c99">🔒 <b>외전: 창업기</b> (개발 예정) — 모아둔 저축 <b>${progress.savings}만</b>이 창업 종잣돈이 됩니다.</span></div>`;
+          })():`<button onclick="startStage(${curStageIdx+1})">▶ 다음 스테이지</button>`)
         : `<div style="color:#b04040;font-size:13.5px">${dmgList.length>g.maxDmg?`손상이 많아요 (${dmgList.length} > ${g.maxDmg}) — ${spoiled?'🌡 냉동+냉장 혼적으로 청과가 얼었어요(동해). 한 온도만 받으세요. ':''}유리는 맨 위·중량은 바닥·벽/이웃 고정이나 🔒라싱`:`혼재 마진이 목표에 못 미쳐요 (${margin} < ${g.margin}만) — ${balFine?'↔️편중적재 벌금이 커요(무게 좌우·앞뒤 고르게). ':''}${dgFine?'☣️위험물은 바닥에·위에 아무것도 얹지 마세요. ':''}고R.T 화주를 받아 꽉 채우거나 롤오버를 줄이세요`}</div><br>`+
           `<button onclick="retryStage()">🔄 다시 부킹</button>`)+
       `<button onclick="backToStages()" style="background:#5a6270">🗂 스케줄로</button>`;
@@ -881,6 +909,7 @@ function resize(){ renderer.setSize(innerWidth,innerHeight); camera.aspect=inner
 addEventListener('resize',resize);
 loadManifest(); resize(); resetView(); updateHUD();
 renderStageSelect();   // 🚢 시작은 스테이지 선택 화면부터
+if(!progress.introSeen) showIntro();   // 첫 방문 온보딩
 let t=0;
 renderer.setAnimationLoop(()=>{
   // 문
