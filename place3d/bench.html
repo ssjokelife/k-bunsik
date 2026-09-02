@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🤖 콘솔 시뮬 벤치마크 — 방과후 스튜디오</title>
+<style>
+  *{box-sizing:border-box;} body{margin:0;background:#0f141c;color:#e6ecf3;font-family:'Malgun Gothic','Segoe UI',sans-serif;line-height:1.5;}
+  .wrap{max-width:960px;margin:0 auto;padding:22px 16px 60px;}
+  h1{font-size:22px;margin:0 0 4px;} .sub{color:#8fa3bd;font-size:13px;margin-bottom:16px;}
+  .card{background:#161d29;border:1px solid #263243;border-radius:12px;padding:16px 18px;margin:14px 0;}
+  .btn{background:#2f6fd0;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:14px;font-family:inherit;cursor:pointer;margin:2px 4px 2px 0;}
+  .btn.alt{background:#3a4657;} .btn:disabled{opacity:.5;}
+  table{width:100%;border-collapse:collapse;margin:8px 0;font-size:12.5px;}
+  th,td{border:1px solid #26303f;padding:7px 8px;text-align:center;} th{background:#1c2635;color:#bcd0e8;}
+  td.name{text-align:left;font-weight:bold;} td.pos{color:#6bd08a;} td.neg{color:#e0705a;}
+  .bar{height:9px;background:#22303f;border-radius:5px;overflow:hidden;} .bar>div{height:100%;background:linear-gradient(90deg,#4a9e4a,#2f9be0);}
+  .heat td{font-variant-numeric:tabular-nums;}
+  .ins{background:#12324a;border-left:4px solid #2f9be0;border-radius:8px;padding:10px 14px;margin:8px 0;font-size:13px;}
+  .muted{color:#8fa3bd;font-size:12px;} .win{color:#ffd766;font-weight:bold;}
+  .prog{height:10px;background:#22303f;border-radius:6px;overflow:hidden;margin:10px 0;} .prog>div{height:100%;background:#2f9be0;width:0;transition:.2s;}
+  iframe{position:fixed;width:520px;height:340px;left:-9999px;top:0;border:0;}
+  .chip{display:inline-block;background:#22303f;border-radius:12px;padding:2px 9px;font-size:11px;margin:2px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🤖 콘솔사 시뮬레이션 벤치마크</h1>
+  <div class="sub">실제 게임 엔진(<code>cargo.html</code>)을 헤드리스로 수백 회 돌려, AI 경영 전략별 성과를 계측합니다.
+    "이게 얼마나 현실적인가"를 수치로. · 방과후 스튜디오</div>
+
+  <div class="card">
+    <b>시나리오</b>
+    <button class="btn" id="runBase" onclick="run('base')">▶ 기본 주간 실행</button>
+    <button class="btn alt" id="runHarsh" onclick="run('harsh')">🌧 거친 주간(BAF·스페이스·마감) 실행</button>
+    <div class="muted" id="cfg">전략 4종 × 스테이지 6 · 각 <b id="N">25</b>회 몬테카를로 (항해 손상은 확률적)</div>
+    <div class="prog" id="prog" style="display:none"><div id="progbar"></div></div>
+    <div class="muted" id="status"></div>
+  </div>
+
+  <div id="report"></div>
+</div>
+
+<iframe id="game" src="cargo.html?sim=1" title="sim engine"></iframe>
+
+<script>
+const SALARY=[220,300,420,600,900], LIVING=150, RANKS=['신입','대리','과장','팀장','부사장'];
+const N=25;
+function game(){ return document.getElementById('game').contentWindow; }
+function ready(){ try{return !!game().wsSimulate;}catch(e){return false;} }
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+// ── 부킹 전략 (wsStageInfo → 수락 화주 bi[]) ──
+function capFill(list,cap,frac){ const lim=cap*frac; let c=0,out=[]; for(const b of list){ if(c+b.cbm<=lim){ out.push(b.bi); c+=b.cbm; } } return out; }
+const STRATS={
+  greedy:  {name:'욕심쟁이', tag:'모든 화주 수락(무지성)', pick:info=>info.bookings.map(b=>b.bi)},
+  selective:{name:'선별가', tag:'고R.T 우선·용량까지·온도인식', pick:info=>{ let bs=info.reefer?info.bookings.filter(b=>!b.flags.frozen):info.bookings.slice(); return capFill(bs.sort((a,b)=>b.rt-a.rt),info.cap,1.0); }},
+  balanced:{name:'실속파', tag:'가치밀도·여유(중량 방지)·온도인식', pick:info=>{ let bs=info.reefer?info.bookings.filter(b=>!b.flags.frozen):info.bookings.slice(); return capFill(bs.sort((a,b)=>(b.rt/b.cbm)-(a.rt/a.cbm)),info.cap,0.85); }},
+  safe:    {name:'안전제일', tag:'위험물·파손 회피·한 온도', pick:info=>{ let bs=info.bookings.filter(b=>!b.flags.dg&&!b.flags.fr); if(info.reefer) bs=bs.filter(b=>!b.flags.frozen); return capFill(bs.slice().sort((a,b)=>b.rt-a.rt),info.cap,1.0); }},
+};
+const ORDER=['greedy','selective','balanced','safe'];
+// 시나리오별 스테이지 케이스 modifier
+function modsFor(scn,idx){ if(scn!=='harsh') return {usdCostAdd:0,tightSpace:false,late:{}};
+  const m={usdCostAdd:0,tightSpace:true,late:{}};
+  if(idx>=3) m.usdCostAdd=120;         // 장거리 BAF 할증
+  if(idx===2) m.late={2:true};         // 냉동건 마감 지연
+  return m; }
+
+let running=false;
+async function run(scn){
+  if(running) return; running=true;
+  document.getElementById('runBase').disabled=true; document.getElementById('runHarsh').disabled=true;
+  for(let i=0;i<80&&!ready();i++) await sleep(150);
+  if(!ready()){ document.getElementById('status').textContent='엔진 로딩 실패'; running=false; return; }
+  const prog=document.getElementById('prog'), bar=document.getElementById('progbar'); prog.style.display='block';
+  const g=game();
+  // 전략 × N 캠페인(6스테이지 순차, 실패 시 최대 3회 재시도)
+  const agg={}; ORDER.forEach(k=>agg[k]={stageMargin:Array(6).fill(0).map(()=>[]), stagePass:Array(6).fill(0), stageStars:Array(6).fill(0),
+    stageDmg:Array(6).fill(0), stageAtt:Array(6).fill(0), totAtt:0, pen:{claims:0,overFine:0,balFine:0,dgFine:0,rollFee:0,lateFine:0,spoiled:0}, savings:[], totStars:[], complete:0, failAt:[] });
+  const total=ORDER.length*N; let done=0;
+  for(const key of ORDER){ const strat=STRATS[key], A=agg[key];
+    for(let run=0;run<N;run++){
+      let rank=0, savings=0, stars=0, cleared=0, failAt=-1;
+      for(let i=0;i<6;i++){
+        const info=g.wsStageInfo(i); const acc=strat.pick(info);
+        let r=g.wsSimulate(i, acc, modsFor(scn,i)), tries=1;
+        while(!r.pass && tries<3){ r=g.wsSimulate(i, acc, modsFor(scn,i)); tries++; }
+        A.stageAtt[i]++; A.totAtt++;
+        A.stageMargin[i].push(r.margin); if(r.pass)A.stagePass[i]++; A.stageStars[i]+=r.stars; A.stageDmg[i]+=r.dmg;
+        A.pen.claims+=r.pen.claims>0?1:0; A.pen.overFine+=r.pen.overFine>0?1:0; A.pen.balFine+=r.pen.balFine>0?1:0;
+        A.pen.dgFine+=r.pen.dgFine>0?1:0; A.pen.rollFee+=r.pen.rollFee>0?1:0; A.pen.lateFine+=r.pen.lateFine>0?1:0; A.pen.spoiled+=r.spoiled>0?1:0;
+        if(!r.pass){ failAt=i; break; }
+        const bonus=Math.round(r.margin*0.15); savings+=SALARY[rank]+bonus-LIVING; rank=Math.min(4,i+1); stars+=r.stars; cleared++;
+      }
+      A.savings.push(savings); A.totStars.push(stars); if(cleared===6)A.complete++; A.failAt.push(failAt);
+      done++; bar.style.width=(done/total*100)+'%';
+      if(run%5===0){ document.getElementById('status').textContent=`${strat.name} … ${done}/${total}`; await sleep(0); }
+    }
+  }
+  prog.style.display='none'; document.getElementById('status').textContent=`완료 · 총 ${total*6} 스테이지 시뮬`;
+  render(scn,agg); running=false;
+  document.getElementById('runBase').disabled=false; document.getElementById('runHarsh').disabled=false;
+}
+const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+const r1=x=>Math.round(x*10)/10, r0=x=>Math.round(x);
+
+function render(scn,agg){
+  const rows=ORDER.map(key=>{ const A=agg[key], s=STRATS[key];
+    const totMargin=r0(A.stageMargin.reduce((a,m)=>a+avg(m),0));
+    const passRates=A.stagePass.map((p,i)=>A.stageAtt[i]?p/A.stageAtt[i]:0);
+    const campRate=Math.round(A.complete/N*100);
+    const savings=r0(avg(A.savings)), stars=r1(avg(A.totStars));
+    return {key,s,A,totMargin,passRates,campRate,savings,stars}; });
+  const bestMargin=Math.max(...rows.map(r=>r.totMargin)), bestStars=Math.max(...rows.map(r=>r.stars)), bestSave=Math.max(...rows.map(r=>r.savings));
+  const stageNames=['상하이','싱가포르','도쿄❄️','LA','두바이','로테르담'];
+  let html=`<div class="card"><b>📊 전략 비교</b> <span class="muted">— ${scn==='harsh'?'거친 주간(케이스 반영)':'기본 주간'} · 각 ${N}회 평균</span>
+    <table><tr><th>전략</th><th>총 마진(6건)</th><th>평균 별점/18</th><th>완주율</th><th>최종 저축(6주)</th><th>주요 실수</th></tr>`;
+  rows.forEach(r=>{
+    const topPen=Object.entries({중량초과:r.A.pen.overFine,편중:r.A.pen.balFine,위험물격리:r.A.pen.dgFine,롤오버:r.A.pen.rollFee,'동해(냉동)':r.A.pen.spoiled,파손클레임:r.A.pen.claims})
+      .filter(([k,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([k,v])=>`<span class="chip">${k} ${Math.round(v/Math.max(1,r.A.totAtt)*100)}%</span>`).join('')||'—';
+    html+=`<tr><td class="name">${r.s.name}<br><span class="muted">${r.s.tag}</span></td>
+      <td class="${r.totMargin>=0?'pos':'neg'}">${r.totMargin===bestMargin?'<span class="win">🏆 </span>':''}${r.totMargin}만</td>
+      <td>${r.stars}${r.stars===bestStars?' ⭐':''}</td>
+      <td>${r.campRate}%</td>
+      <td class="${r.savings>=0?'pos':'neg'}">${r.savings===bestSave?'<span class="win">💰 </span>':''}${r.savings}만</td>
+      <td>${topPen}</td></tr>`;
+  });
+  html+=`</table><div class="muted">완주율=6건 전부 통과(최대 3회 재시도). 최종 저축=월급+성과급−생존비(150) 누적, 신입→부사장 승진 반영.</div></div>`;
+
+  // 스테이지별 마진 히트맵
+  html+=`<div class="card"><b>🗺 스테이지별 평균 마진(만원)</b><table class="heat"><tr><th>전략</th>${stageNames.map(n=>`<th>${n}</th>`).join('')}</tr>`;
+  rows.forEach(r=>{ html+=`<tr><td class="name">${r.s.name}</td>${r.A.stageMargin.map((m,i)=>{ if(!r.A.stageAtt[i]) return `<td class="muted">미도달</td>`; const v=r0(avg(m));const pr=Math.round(r.passRates[i]*100);return `<td class="${v>=0?'pos':'neg'}">${v}<br><span class="muted">통과 ${pr}%</span></td>`;}).join('')}</tr>`; });
+  html+=`</table></div>`;
+
+  // 인사이트 자동 생성
+  const win=rows.reduce((a,b)=>b.savings>a.savings?b:a);
+  const greedy=rows.find(r=>r.key==='greedy'), safe=rows.find(r=>r.key==='safe');
+  const reeferSafe=r0(avg(safe.A.stageMargin[2])), reeferGreedy=r0(avg(greedy.A.stageMargin[2]));
+  let ins=`<div class="card"><b>💡 인사이트</b>`;
+  ins+=`<div class="ins">최종 저축 1위: <span class="win">${win.s.name}</span> (${win.savings}만). 총 마진 1위: <b>${rows.reduce((a,b)=>b.totMargin>a.totMargin?b:a).s.name}</b>.</div>`;
+  ins+=`<div class="ins">🌡 냉동건(도쿄): 안전제일 <b>${reeferSafe}만</b> vs 욕심쟁이 <b>${reeferGreedy}만</b> — 냉동+냉장 혼적 시 <b>동해 클레임</b>으로 욕심쟁이가 손해. 한 온도만 받는 규율이 이긴다.</div>`;
+  ins+=`<div class="ins">📦 욕심쟁이는 <b>과수락</b>으로 중량초과·롤오버·위험물격리 벌금이 잦다(주요 실수 열 참조) — 박스값은 고정, 다 받는다고 이득이 아니다.</div>`;
+  if(scn==='harsh') ins+=`<div class="ins">🌧 거친 주간: BAF 할증·마감 지연·스페이스 부족이 반영되어 기본 대비 마진이 눌린다. 장거리(LA·로테르담)일수록 BAF 타격이 크다.</div>`;
+  ins+=`<div class="muted" style="margin-top:8px">※ 실제 게임 엔진의 부킹→솔버 적재→항해 손상 판정→혼재마진 정산을 그대로 호출. 항해 손상은 확률적이라 회차마다 변동.</div></div>`;
+  html+=ins;
+  document.getElementById('report').innerHTML=html;
+}
+document.getElementById('N').textContent=N;
+// 엔진 준비되면 자동 1회
+(async()=>{ for(let i=0;i<80&&!ready();i++) await sleep(150); if(ready()) run('base'); })();
+</script>
+</body>
+</html>

@@ -238,7 +238,8 @@ const STAGES = [
       {who:'신라교역',   cargo:['pallet','pallet','glass','glass','carton','carton']},
     ] },
 ];
-let progress; try{ progress=JSON.parse(localStorage.getItem('cargo_progress')||'{"cleared":0,"cash":0}'); }catch(e){ progress={cleared:0,cash:0}; }
+const SIM=/[?&]sim/.test(location.search);   // 벤치마크 모드 — 유저 저장과 격리(메모리 진행)
+let progress; if(SIM){ progress={cleared:0,cash:0}; } else { try{ progress=JSON.parse(localStorage.getItem('cargo_progress')||'{"cleared":0,"cash":0}'); }catch(e){ progress={cleared:0,cash:0}; } }
 // 🎓 커리어·재무 메타 (본편 = 콘솔사 신입사원)
 progress.savings=progress.savings??0; progress.rankIdx=progress.rankIdx??0; progress.certs=progress.certs??{};
 progress.stars=progress.stars??{}; progress.introSeen=progress.introSeen??false;
@@ -254,7 +255,7 @@ const CERTS={
 const hasCert=k=>!!progress.certs[k];
 const negoUnlocked=()=>progress.rankIdx>=2 || hasCert('english');   // 과장↑ 또는 영어자격
 let negoActive=false;
-function saveProgress(){ try{ localStorage.setItem('cargo_progress',JSON.stringify(progress)); }catch(e){} }
+function saveProgress(){ if(SIM) return; try{ localStorage.setItem('cargo_progress',JSON.stringify(progress)); }catch(e){} }
 // 🖥️ 워크스테이션 셸 연동 — 케이스가 게임에 주는 영향(BAF 할증·스페이스 부족·마감 지연)
 window.wsMods={usdCostAdd:0, tightSpace:false, late:{}};
 let curStage=null, curStageIdx=-1;
@@ -606,30 +607,29 @@ function sailAndJudge(){
   const skewed=Math.abs(balanceState().lr)>0.32;
   const shakeP=0.30+sea*0.16+(skewed?0.15:0);   // 항해강도·편중이 흔들림 확률 결정
   setTimeout(()=>{
-    // ── 손상 판정 ──
     const cbmUsed = placed.reduce((a,p)=>a+p.w*p.d*p.h,0);
-    for(const p of placed){
-      const t=TYPES[p.type]; let hit=false;
-      // 1) 유리 위에 무엇이든 실림 → 눌림
-      if(t.fragile){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++) if(occ[key(p.i+di,p.j+dj,p.k+p.h)]!==undefined) hit=true; }
-      // 2) 중량이 바닥이 아닌 곳(k>0)에 → 아래 화물 짓눌림
-      if(t.heavy && p.k>0){ hit=true; const bId=occ[key(p.i,p.j,p.k-1)]; const below=bId!==undefined?itemById(bId):null; if(below) below.damaged=true; }
-      // 3) 고정 안 됨 → 흔들림: 위 열림+사방 지지 부족한 화물만 (벽·이웃 붙이거나 🔒라싱하면 안전)
-      if(!hit && !t.heavy && !p.lashed){
-        let topOpen = p.k+p.h<CH;
-        if(topOpen){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++) if(occ[key(p.i+di,p.j+dj,p.k+p.h)]!==undefined){ topOpen=false; break; } }
-        if(topOpen && sideBlocked(p)<2 && Math.random()<shakeP) hit=true;
-      }
-      if(hit) p.damaged=true;
-    }
-    // 4) 🌡 온도 혼적 — 리퍼 박스에 냉동(-18℃)+냉장(+4℃) 동시 적재 → 설정온도 하나뿐, 청과 동해
-    if(CONTAINERS[curCon].reefer && placed.some(p=>TYPES[p.type].frozen)){
-      placed.filter(p=>TYPES[p.type].chilled).forEach(p=>{ p.damaged=true; p.spoiled=true; });
-    }
+    judgeDamage(shakeP);
     placed.filter(p=>p.damaged).forEach(p=>{ paintCargo(p.mesh, 0xd03030, 0x551010); });
     doorTarget=1;   // 문 열어서 결과 공개
     setTimeout(()=>showResult(cbmUsed), 1000);
   }, 3400);
+}
+// 손상 판정 (실플레이·시뮬 공용) — placed[].damaged/spoiled 설정
+function judgeDamage(shakeP){
+  for(const p of placed){
+    const t=TYPES[p.type]; let hit=false;
+    if(t.fragile){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++) if(occ[key(p.i+di,p.j+dj,p.k+p.h)]!==undefined) hit=true; }
+    if(t.heavy && p.k>0){ hit=true; const bId=occ[key(p.i,p.j,p.k-1)]; const below=bId!==undefined?itemById(bId):null; if(below) below.damaged=true; }
+    if(!hit && !t.heavy && !p.lashed){
+      let topOpen = p.k+p.h<CH;
+      if(topOpen){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++) if(occ[key(p.i+di,p.j+dj,p.k+p.h)]!==undefined){ topOpen=false; break; } }
+      if(topOpen && sideBlocked(p)<2 && Math.random()<shakeP) hit=true;
+    }
+    if(hit) p.damaged=true;
+  }
+  if(CONTAINERS[curCon].reefer && placed.some(p=>TYPES[p.type].frozen)){
+    placed.filter(p=>TYPES[p.type].chilled).forEach(p=>{ p.damaged=true; p.spoiled=true; });
+  }
 }
 // ⚖ 무게중심·편중 계산 (lr 좌우 -1..1, fa 앞뒤 -1..1, top 무게중심 높이 0..1)
 function balanceState(){
@@ -649,6 +649,33 @@ function dgViolations(){
   }
   return v;
 }
+// 💱 정산 핵심 계산 (실플레이·시뮬 공용 · 순수, progress/DOM 불변)
+function computeSettleCore(cbmUsed){
+  const g=curStage.goal, dmgList=placed.filter(p=>p.damaged);
+  const L=LANES[curStage.to], fx=curStage.fx, usdRate=L.rate*(negoActive?1.12:1), box=L.box[curCon];
+  const placedRT=Math.round(placed.reduce((a,p)=>a+rtOf(p.type),0)*10)/10;
+  const incomeUSD=Math.round(placedRT*usdRate);
+  const dgN=placed.filter(p=>TYPES[p.type].hazmat).length, dgUsd=dgN*50;
+  const baf=Math.max(0,Math.round(window.wsMods.usdCostAdd||0));
+  const usdNet=incomeUSD-box-dgUsd-baf, usdNetKrw=usdNet*fx/10000;
+  const opsMargin=Math.round(placedRT*0.2*10)/10;
+  const blCount=new Set(placed.map(p=>p.whoi)).size, doc=blCount*4;
+  const reefer=CONTAINERS[curCon].reefer?40:0;
+  const lashN=placed.filter(p=>p.lashed).length, lash=lashN*12;
+  const claims=dmgList.reduce((a,p)=>a+(TYPES[p.type].val||30),0);
+  const rollover=INV.length-placed.length, rollFee=Math.round(rollover*(hasCert('forklift')?2.5:5)*(window.wsMods.tightSpace?1.5:1));
+  const lateFine=window.wsMods.late[curStageIdx]?30:0;
+  const totalWt=Math.round(placed.reduce((a,p)=>a+TYPES[p.type].wt,0)*10)/10;
+  const payload=CONTAINERS[curCon].payload, overWt=Math.max(0,Math.round((totalWt-payload)*10)/10), overFine=Math.round(overWt*30);
+  const bal=balanceState(), lrSkew=Math.abs(bal.lr), balFine=lrSkew>0.32? Math.round((lrSkew-0.32)*180):0;
+  const dgV=dgViolations(), dgFine=hasCert('hazmat')?0:dgV*15;
+  const spoiled=dmgList.filter(p=>p.spoiled).length;
+  const margin=Math.round(usdNetKrw + opsMargin + doc - reefer - lash - claims - overFine - rollFee - balFine - dgFine - lateFine);
+  const fillPct=Math.round((cbmUsed/(CW*CD*CH))*100);
+  const pass = margin>=g.margin && dmgList.length<=g.maxDmg;
+  let stars=0; if(pass){ stars=1; if(dmgList.length===0) stars=2; if(dmgList.length===0 && rollover===0 && (balFine+dgFine+overFine)===0 && margin>=g.margin*1.6) stars=3; }
+  return {g,fx,usdRate,box,placedRT,incomeUSD,dgUsd,baf,usdNet,usdNetKrw,opsMargin,blCount,doc,reefer,lash,claims,rollover,rollFee,lateFine,totalWt,payload,overWt,overFine,balFine,dgFine,spoiled,margin,fillPct,pass,stars};
+}
 function showResult(cbmUsed){
   const dmgList=placed.filter(p=>p.damaged);
   const dmgCbm=dmgList.reduce((a,p)=>a+p.w*p.d*p.h,0);
@@ -656,31 +683,7 @@ function showResult(cbmUsed){
   const rate=cbmUsed/(CW*CD*CH);
   const mB=document.getElementById('modalBody');
   if(curStage){   // 📅 스테이지 판정 — 전량 적재 + 손상 제한, 그리고 손익 정산
-    const g=curStage.goal;
-    // 💱 LCL 혼재 마진 정산 (R.T 청구 − 박스값 − 부대비 − 클레임 − 롤오버)
-    const L=LANES[curStage.to], fx=curStage.fx, usdRate=L.rate*(negoActive?1.12:1), box=L.box[curCon];
-    const placedRT=Math.round(placed.reduce((a,p)=>a+rtOf(p.type),0)*10)/10;
-    const incomeUSD=Math.round(placedRT*usdRate);                          // 화주 청구 운임(USD)
-    const dgN=placed.filter(p=>TYPES[p.type].hazmat).length, dgUsd=dgN*50;  // USD 위험물 할증
-    const baf=Math.max(0,Math.round(window.wsMods.usdCostAdd||0));          // 🚢 BAF 유류할증(케이스 적용, USD)
-    const usdNet=incomeUSD-box-dgUsd-baf;                                   // USD 순액 (운임 − 박스 − DG − BAF)
-    const usdNetKrw=usdNet*fx/10000;                                        // 만원
-    const opsMargin=Math.round(placedRT*0.2*10)/10;                         // CFS+THC 마진 ₩2천/R.T
-    const blCount=new Set(placed.map(p=>p.whoi)).size, doc=blCount*4;       // 화주별 House B/L ₩4만 (수입)
-    const reefer=CONTAINERS[curCon].reefer?40:0;
-    const lashN=placed.filter(p=>p.lashed).length, lash=lashN*12;
-    const claims=dmgList.reduce((a,p)=>a+(TYPES[p.type].val||30),0);        // 손상 = 화주 클레임 배상
-    const rollover=INV.length-placed.length, rollFee=Math.round(rollover*(hasCert('forklift')?2.5:5)*(window.wsMods.tightSpace?1.5:1)); // 🚜 지게차 반값 · 스페이스부족 1.5배
-    const lateFine=window.wsMods.late[curStageIdx]?30:0;                    // ⏰ 마감 지연 위약금
-    const totalWt=Math.round(placed.reduce((a,p)=>a+TYPES[p.type].wt,0)*10)/10;
-    const payload=CONTAINERS[curCon].payload, overWt=Math.max(0,Math.round((totalWt-payload)*10)/10);
-    const overFine=Math.round(overWt*30);                                  // 중량초과 벌금 ₩30만/톤
-    const bal=balanceState(), lrSkew=Math.abs(bal.lr), balFine=lrSkew>0.32? Math.round((lrSkew-0.32)*180):0;  // 좌우 편중적재 벌금(전복축)
-    const dgV=dgViolations(), dgFine=hasCert('hazmat')?0:dgV*15;           // ☣️ 위험물 자격 시 격리 벌금 면제
-    const spoiled=dmgList.filter(p=>p.spoiled).length;                     // 온도 혼적 동해
-    const margin=Math.round(usdNetKrw + opsMargin + doc - reefer - lash - claims - overFine - rollFee - balFine - dgFine - lateFine);
-    const fillPct=Math.round(rate*100);
-    const pass = margin>=g.margin && dmgList.length<=g.maxDmg;
+    const {g,fx,usdRate,box,placedRT,incomeUSD,dgUsd,baf,usdNet,usdNetKrw,opsMargin,blCount,doc,reefer,lash,claims,rollover,rollFee,lateFine,totalWt,payload,overWt,overFine,balFine,dgFine,spoiled,margin,fillPct,pass,stars}=computeSettleCore(cbmUsed);
     let earned=0, payslip=null;
     if(pass && curStageIdx===progress.cleared){
       progress.cleared++; progress.cash+=margin; earned=margin;
@@ -691,13 +694,9 @@ function showResult(cbmUsed){
       payslip={salary,bonus,net,promoted: progress.rankIdx>oldRank? RANKS[progress.rankIdx]:null};
       saveProgress();
     }
-    // ⭐ 별점 — ①목표달성 ②무손상 ③완벽운영(무손상·롤오버0·벌금0·마진 목표1.6배↑)
-    let stars=0, newBest=false;
-    if(pass){ stars=1;
-      if(dmgList.length===0) stars=2;
-      if(dmgList.length===0 && rollover===0 && (balFine+dgFine+overFine)===0 && margin>=g.margin*1.6) stars=3;
-      const prev=progress.stars[curStageIdx]||0; if(stars>prev){ progress.stars[curStageIdx]=stars; newBest=true; saveProgress(); }
-    }
+    // ⭐ 별점 최고기록 저장 (stars는 core 계산)
+    let newBest=false;
+    if(pass){ const prev=progress.stars[curStageIdx]||0; if(stars>prev){ progress.stars[curStageIdx]=stars; newBest=true; saveProgress(); } }
     const starStr=s=>'★'.repeat(s)+'☆'.repeat(3-s);
     const last = curStageIdx+1>=STAGES.length;
     // 🖥️ 셸에 결과 통지 (메신저·알림·서류 갱신)
@@ -941,6 +940,28 @@ window.wsBeginStage=(idx, acc, nego)=>{
   return true;
 };
 window.wsAddBooking=(idx, booking)=>{ const s=STAGES[idx]; if(!s) return 0; s.bookings.push(booking); return s.bookings.length; };
+// 🤖 헤드리스 시뮬 — 스테이지 1회 실행(부킹→솔버 적재→항해 손상→정산), progress 불변, 결과 반환
+window.wsSimulate=(idx, acc, opts)=>{
+  opts=opts||{}; if(!STAGES[idx]) return null;
+  curStageIdx=idx; curStage=STAGES[idx];
+  applyContainerSpec(curStage.con); buildContainer();
+  let a=(acc||[]).slice();
+  if(opts.nego){ a=a.filter(()=>Math.random()>=0.15); }   // 단가협상 이탈 위험
+  negoActive=!!opts.nego; accepted=new Set(a);
+  clearAll();                                             // loadManifest(accepted)
+  const savedMods=window.wsMods; window.wsMods=opts.mods||{usdCostAdd:0,tightSpace:false,late:{}};
+  const plan=solveOptimal();
+  for(const s of plan){ const p=place(s.type,s.rot,s.i,s.j); if(p){ const inv=INV[s.idx]; if(inv){inv.placed=true;p.invIdx=s.idx;p.who=inv.who;p.whoi=inv.whoi;} } }
+  const sea=LANES[curStage.to].sea, skewed=Math.abs(balanceState().lr)>0.32, shakeP=0.30+sea*0.16+(skewed?0.15:0);
+  judgeDamage(shakeP);
+  const cbmUsed=placed.reduce((a2,p)=>a2+p.w*p.d*p.h,0), S=computeSettleCore(cbmUsed);
+  const res={ idx, to:curStage.to, pass:S.pass, margin:S.margin, stars:S.stars,
+    dmg:placed.filter(p=>p.damaged).length, spoiled:S.spoiled, rollover:S.rollover, fillPct:S.fillPct,
+    placedRT:S.placedRT, placed:placed.length, invCount:INV.length, overWt:S.overWt,
+    pen:{claims:S.claims, overFine:S.overFine, balFine:S.balFine, dgFine:S.dgFine, rollFee:S.rollFee, lateFine:S.lateFine, baf:S.baf} };
+  window.wsMods=savedMods; clearAll();
+  return res;
+};
 window.wsCargoName=(t)=>TYPES[t]?TYPES[t].name:t;
 window.wsCargoIcon=(t)=>TYPES[t]?TYPES[t].icon:'📦';
 
