@@ -34,6 +34,7 @@
 <body>
 <div id="top">
   <b>🎓 콘솔사 사원 교육 콘솔</b><span class="muted">과제 모드</span>
+  <a href="academy.html" style="color:#5aa0e8;font-size:12.5px;text-decoration:none">🎓 아카데미</a>
   <a href="casestudy.html" style="color:#5aa0e8;font-size:12.5px;text-decoration:none">📚 사례 학습</a>
   <span class="sp"></span>
   <span class="muted">교육생</span><input id="who" value="김신입" maxlength="10">
@@ -52,6 +53,7 @@
   <div id="right"><iframe id="game" src="cargo.html?train=1" title="적재 작업"></iframe></div>
 </div>
 
+<script src="cloud.js"></script>
 <script>
 function game(){ return document.getElementById('game').contentWindow; }
 function ready(){ try{return !!game().wsScoreLayout;}catch(e){return false;} }
@@ -139,7 +141,10 @@ function replayModel(){ if(lastModel&&ready()) game().wsReplayLayout(lastModel);
 // 로컬 리더보드(여러 명 제출 누적)
 function saveLB(idx,name,you){ const key='train_lb_'+idx; let a; try{a=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){a=[];}
   a.push({name, margin:you.expMargin, stars:you.expStars, pass:you.passRate, t:Date.now()});
-  a.sort((x,y)=>y.margin-x.margin); a=a.slice(0,10); localStorage.setItem(key,JSON.stringify(a)); }
+  a.sort((x,y)=>y.margin-x.margin); a=a.slice(0,10); localStorage.setItem(key,JSON.stringify(a));
+  try{localStorage.setItem('trainee',name);}catch(e){}
+  if(window.Cloud) Cloud.saveSubmission({trainee:name, case_idx:idx, margin:you.expMargin, stars:you.expStars, pass:you.passRate});   // 팀 공유(설정 시)
+}
 function renderLB(idx){ let a; try{a=JSON.parse(localStorage.getItem('train_lb_'+idx)||'[]');}catch(e){a=[];}
   if(!a.length) return '';
   return `<div class="card lb"><b>🏅 제출 순위</b> <span class="muted">(이 케이스 · 기대 마진순)</span>`+

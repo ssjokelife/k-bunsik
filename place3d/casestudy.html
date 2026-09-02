@@ -30,6 +30,9 @@
   .rv b{color:#cfe4ff;} .src{font-size:11.5px;color:#7f97b5;margin-top:6px;}
   .src a{color:#5aa0e8;} .play{display:inline-block;margin-top:8px;background:#e8734f;color:#fff;text-decoration:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:bold;}
   .btn{background:#2f6fd0;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:13.5px;cursor:pointer;font-family:inherit;margin-top:8px;}
+  .rubric{background:#0d1622;border:1px solid #223247;border-radius:8px;padding:11px 13px;margin:8px 0;font-size:13px;}
+  .rubric textarea{width:100%;min-height:54px;background:#0a1420;border:1px solid #26405c;color:#e6ecf3;border-radius:6px;padding:8px;font-family:inherit;font-size:12.5px;resize:vertical;}
+  .rbk{display:block;font-size:12.5px;padding:3px 0;cursor:pointer;} .rbk input{margin-right:7px;vertical-align:middle;}
   .score{background:#12233a;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:10px;}
   .pending{color:#e0b070;font-size:12px;}
 </style>
@@ -44,6 +47,7 @@
   <div id="list"></div>
 </div>
 
+<script src="cloud.js"></script>
 <script>
 // 실제 사례 케이스팩 (출처 포함). 리서치 검증분으로 확장 예정.
 const CASES=[
@@ -159,22 +163,40 @@ const CASES=[
     src:[['OVRSEA — Incoterms 2020','https://www.ovrsea.com/insights/en/guides/incoterms-2020-who-pays-what'],['Cooperative Logistics — 포워더 실수','https://blog.thecooperativelogisticsnetwork.com/2025/04/21/incoterms-for-freight-forwarders-common-mistakes-and-how-to-avoid-them/']] },
 ];
 
+// 직급 트랙 + 모범 근거 루브릭(서술형 자기평가용)
+const RANK_OF={stow:'신입',reefer:'대리',rollover:'대리',vgm:'과장',demurrage:'과장',incoterms:'과장',tempchem:'과장',yantian:'팀장',undeclared:'팀장',lcl:'팀장'};
+const RUBRIC={
+  yantian:['품명 검증(애매하면 임의 수리 금지)','자기발열 Class 4.2 시험성적서 요구','확인 전 선적 보류'],
+  undeclared:['고위험 품목·화주를 겨냥한 무작위 검사','신고서-실물 교차검증','열원 이격·저온 통풍 적재'],
+  vgm:['VGM 의무(No VGM, No Load)','책임은 화주','과적=스택 하중·선체 안전 위협'],
+  reefer:['리퍼는 단일 세트포인트','냉동·냉장 혼적 금지','PTI·세트포인트 이중확인·사전냉각'],
+  tempchem:['냉각·차광 유지·신속 선적','보관 온도 이력 확인','NVOCC도 보관조건 확인 책임'],
+  stow:['무거운 것은 바닥·중앙','하중 균등 배분(편중 방지)','래싱·CTU Code'],
+  demurrage:['무료기간·D&D 조건 사전 명확화','통제 불가 사유 증빙 확보','증빙 기반 면제·감면 청구'],
+  rollover:['선사 정시성·롤오버율로 선택','중요·마감 화물 확정선복','조기예약·분산'],
+  lcl:['양립 불가 화물 분리(액체·분말·식품·화학)','ISPM15 목재 확인','CFS 봉인 전 하자 검수'],
+  incoterms:['컨테이너는 FCA/CIP','FOB/CIF는 본선인도(재래화물)','조건이 위험이전·책임을 가른다'],
+};
+CASES.forEach(c=>{ c.rank=RANK_OF[c.id]||'대리'; c.rubric=RUBRIC[c.id]||[]; });
+const RANKS=['신입','대리','과장','팀장'];
 let filter='all';
 function prog(){ try{return JSON.parse(localStorage.getItem('casestudy_prog')||'{}');}catch(e){return {};} }
 function save(p){ try{localStorage.setItem('casestudy_prog',JSON.stringify(p));}catch(e){} }
 function cats(){ const cs=[...new Set(CASES.map(c=>c.cat))];
   document.getElementById('cats').innerHTML=`<span class="chip ${filter==='all'?'on':''}" onclick="setF('all')">전체</span>`+
+    RANKS.map(r=>`<span class="chip ${filter===r?'on':''}" onclick="setF('${r}')">🎖 ${r}</span>`).join('')+
+    `<span style="color:#3a4657">|</span>`+
     cs.map(c=>`<span class="chip ${filter===c?'on':''}" onclick="setF('${c}')">${c}</span>`).join(''); }
 window.setF=f=>{ filter=f; cats(); renderList(); };
 function scoreBar(){ const p=prog(); const done=Object.keys(p).length, right=Object.values(p).filter(x=>x.correct).length;
-  document.getElementById('score').innerHTML=`📊 학습 진행 <b>${done}/${CASES.length}</b> · 정답 <b>${right}</b> · <a href="train.html" style="color:#5aa0e8">🎮 교육 콘솔(체험 과제)로</a> · <span class="pending">실제 사고·공식 조사보고서 기반</span>`; }
+  document.getElementById('score').innerHTML=`📊 학습 진행 <b>${done}/${CASES.length}</b> · 정답 <b>${right}</b> · <a href="academy.html" style="color:#5aa0e8">🎓 아카데미</a> · <a href="train.html" style="color:#5aa0e8">🎮 교육 콘솔</a> · <span class="pending">실제 사고·공식 조사보고서 기반</span>`; }
 function renderList(){
-  const list=CASES.filter(c=>filter==='all'||c.cat===filter);
+  const list=CASES.filter(c=>filter==='all'||c.cat===filter||c.rank===filter);
   const p=prog();
   document.getElementById('list').innerHTML=list.map(c=>{ const st=p[c.id];
     return `<div class="card" id="card_${c.id}">
       <div class="chead" onclick="toggle('${c.id}')"><div class="cico">${c.icon}</div>
-        <div class="ctitle"><b>${c.title}</b><br><span class="ctag">${c.cat}</span></div>
+        <div class="ctitle"><b>${c.title}</b><br><span class="ctag">🎖 ${c.rank} · ${c.cat}</span></div>
         <div class="cstate">${st?(st.correct?'<span class="ok">✅ 정답</span>':'<span class="no">❌ 오답</span>'):'미학습'}</div></div>
       <div class="cbody">
         <div class="scn">📋 <b>상황</b> — ${c.scenario}</div>
@@ -184,20 +206,36 @@ function renderList(){
           <div class="rv exp"><b>해설</b><br>${c.explain}</div>
           <div class="rv out"><b>실제 사례·결말</b><br>${c.outcome}</div>
           <div class="rv les"><b>교훈</b><br>${c.lesson}</div>
+          <div class="rubric">
+            <div style="font-weight:bold;margin-bottom:3px">✍ 판단 근거 — 직접 써보세요</div>
+            <textarea id="ref_${c.id}" placeholder="왜 그 결정이 옳은지 핵심 근거를 써보세요 (서술형 연습)">${(p[c.id]&&p[c.id].ref)||''}</textarea>
+            <div style="font-weight:bold;margin:8px 0 3px">📋 모범 근거 체크리스트 — 내가 짚은 것</div>
+            ${c.rubric.map((r,ri)=>`<label class="rbk"><input type="checkbox" id="rb_${c.id}_${ri}"> ${r}</label>`).join('')}
+            <button class="btn" onclick="selfEval('${c.id}')">✅ 자기평가</button>
+            <span id="rbres_${c.id}" class="muted"></span>
+            <div class="muted" style="margin-top:4px">※ 서술형 자동 채점(LLM)은 백엔드 연동 시 활성화됩니다 — 지금은 모범 근거 대비 자기평가.</div>
+          </div>
           <div class="src">출처: ${c.src.map(s=>`<a href="${s[1]}" target="_blank">${s[0]}</a>`).join(' · ')}</div>
           ${c.play?`<a class="play" href="train.html?case=${c.play.case}">🎮 ${c.play.label} — 교육 콘솔에서 체험</a>`:''}
         </div>
       </div></div>`;
   }).join('');
-  // restore answered state
-  list.forEach(c=>{ if(p[c.id]!==undefined) markAnswered(c.id,p[c.id].pick,false); });
+  list.forEach(c=>{ if(p[c.id]!==undefined) markAnswered(c.id,p[c.id].pick,false);
+    if(p[c.id]&&p[c.id].rb){ p[c.id].rb.forEach(ri=>{ const b=document.getElementById(`rb_${c.id}_${ri}`); if(b)b.checked=true; }); } });
 }
+window.selfEval=(id)=>{ const c=CASES.find(x=>x.id===id); const checked=[];
+  c.rubric.forEach((r,ri)=>{ const b=document.getElementById(`rb_${id}_${ri}`); if(b&&b.checked) checked.push(ri); });
+  const ref=(document.getElementById('ref_'+id)||{}).value||'';
+  const p=prog(); p[id]=Object.assign(p[id]||{pick:-1,correct:false},{rb:checked,ref}); save(p);
+  const n=checked.length, tot=c.rubric.length;
+  document.getElementById('rbres_'+id).innerHTML=` → 핵심 근거 <b style="color:${n===tot?'#6bd08a':'#e0b070'}">${n}/${tot}</b> 짚음${n===tot?' 🎯 완벽':''}`;
+};
 window.toggle=id=>{ document.getElementById('card_'+id).classList.toggle('open'); };
 window.answer=(id,pick)=>{ const c=CASES.find(x=>x.id===id); const correct=!!c.opts[pick].c;
   const p=prog(); if(p[id]===undefined){ p[id]={pick,correct}; save(p); }
   markAnswered(id,pick,true); scoreBar();
-  // update header state
   const stEl=document.querySelector(`#card_${id} .cstate`); if(stEl) stEl.innerHTML=correct?'<span class="ok">✅ 정답</span>':'<span class="no">❌ 오답</span>';
+  if(window.Cloud) Cloud.saveAttempt({trainee:(localStorage.getItem('trainee')||'익명'), case_id:id, correct});   // 팀 공유(설정 시)
 };
 function markAnswered(id,pick,open){ const c=CASES.find(x=>x.id===id); const card=document.getElementById('card_'+id); if(!card) return;
   card.classList.add('answered'); if(open) card.classList.add('open');
@@ -205,6 +243,7 @@ function markAnswered(id,pick,open){ const c=CASES.find(x=>x.id===id); const car
     if(c.opts[i].c) el.classList.add('correct'); if(i===pick&&!c.opts[i].c) el.classList.add('wrong');
     if(c.opts[i].c) el.innerHTML+='<span class="mk">✔ 정답</span>'; else if(i===pick) el.innerHTML+='<span class="mk">✘ 내 선택</span>'; }); }
 cats(); renderList(); scoreBar();
+const _om=location.search.match(/[?&]open=([a-z]+)/); if(_om){ const el=document.getElementById('card_'+_om[1]); if(el){ el.classList.add('open'); setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'center'}),200); } }
 </script>
 </body>
 </html>

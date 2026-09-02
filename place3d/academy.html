@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🎓 방과후 콘솔 아카데미 — 사원 교육 과정</title>
+<style>
+  *{box-sizing:border-box;} body{margin:0;background:#0f141c;color:#e6ecf3;font-family:'Malgun Gothic','Segoe UI',sans-serif;line-height:1.6;}
+  .wrap{max-width:920px;margin:0 auto;padding:20px 16px 70px;}
+  h1{font-size:23px;margin:0 0 4px;} .sub{color:#8fa3bd;font-size:13px;margin-bottom:16px;}
+  a{color:#5aa0e8;}
+  .card{background:#161d29;border:1px solid #263243;border-radius:12px;padding:16px 18px;margin:14px 0;}
+  .stat{display:flex;gap:10px;flex-wrap:wrap;}
+  .kpi{flex:1;min-width:120px;background:#12233a;border-radius:10px;padding:11px 13px;text-align:center;}
+  .kpi .v{font-size:22px;font-weight:bold;color:#7fc0ff;} .kpi .l{font-size:11.5px;color:#9fb0c8;}
+  .track{border-left:4px solid var(--c);}
+  .thead{display:flex;align-items:center;gap:10px;margin-bottom:6px;} .thead .rk{font-size:18px;font-weight:bold;} .thead .rl{color:#9fb0c8;font-size:12.5px;}
+  .pbar{height:8px;background:#22303f;border-radius:5px;overflow:hidden;margin:6px 0 10px;} .pbar>div{height:100%;background:linear-gradient(90deg,#4a9e4a,#2f9be0);}
+  .item{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #1c2634;text-decoration:none;color:#e6ecf3;}
+  .item:last-child{border-bottom:0;} .item .ic{font-size:16px;width:22px;text-align:center;flex:none;}
+  .item .tt{flex:1;font-size:13px;} .item .tt .k{font-size:11px;color:#8fa3bd;}
+  .item .st{font-size:12px;flex:none;} .st .ok{color:#6bd08a;} .st .mid{color:#e0b070;} .st .no{color:#7f8a99;}
+  .badge{display:inline-block;background:#22303f;border-radius:9px;padding:1px 7px;font-size:11px;margin-left:3px;}
+  .catrow{display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0;border-bottom:1px solid #1c2634;}
+  input{background:#0c1826;border:1px solid #26405c;color:#e6ecf3;border-radius:6px;padding:7px 9px;font-size:12.5px;font-family:inherit;}
+  .btn{background:#2f6fd0;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit;margin:3px 3px 0 0;}
+  .btn.alt{background:#3a4657;} .muted{color:#8fa3bd;font-size:12px;} code{background:#0c1826;padding:1px 5px;border-radius:4px;font-size:11px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎓 방과후 콘솔 아카데미</h1>
+  <div class="sub">부산 신항 콘솔사 사원 교육 과정 — <b>직급별 트랙</b>으로 <b>📚 사례 학습(판단)</b>과 <b>🎮 교육 콘솔(체험)</b>을 함께.
+    · <a href="casestudy.html">사례 전체</a> · <a href="train.html">교육 콘솔</a> · <a href="bench.html">AI 벤치마크</a></div>
+
+  <div class="card"><b>📊 나의 학습 현황</b>
+    <div class="stat" id="kpis" style="margin-top:8px"></div>
+  </div>
+
+  <div id="tracks"></div>
+
+  <div class="card"><b>🗂 카테고리별 정답률</b><div id="cats" style="margin-top:6px"></div></div>
+
+  <div class="card"><b>☁ 클라우드(팀 공유) — 선택</b>
+    <div class="muted" style="margin:4px 0 8px">Supabase를 연결하면 제출·정답이 팀 리더보드로 공유됩니다. 미연결 시 이 브라우저에만 저장(로컬).</div>
+    <input id="sbUrl" placeholder="Supabase URL (https://xxx.supabase.co)" style="width:100%;margin-bottom:6px">
+    <input id="sbKey" placeholder="Publishable key (sb_publishable_...)" style="width:100%;margin-bottom:6px">
+    <button class="btn" onclick="saveCloud()">연결 저장</button>
+    <button class="btn alt" onclick="clearCloud()">해제(로컬)</button>
+    <span class="muted" id="sbStatus"></span>
+    <div class="muted" style="margin-top:8px">※ 스키마는 <code>supabase/consoltrain.sql</code>를 프로젝트에 적용하세요. (RLS: anon insert/select)</div>
+  </div>
+</div>
+
+<script>
+// 교육 과정(커리큘럼) — 직급별로 체험 과제(play=train.html?case=N)와 판단 케이스(quiz=casestudy id)
+const TRACKS=[
+  { rank:'신입', color:'#7fd18a', role:'적입 기본 — 무손상·안전 적재', items:[
+    {t:'play',ref:0,title:'부산→상하이 LCL 적입',key:'적입·무손상'},
+    {t:'quiz',ref:'stow',title:'무게중심·스택 하중',key:'적재 원칙'} ]},
+  { rank:'대리', color:'#5aa0e8', role:'부킹·냉동 — 무엇을 실을지 고르기', items:[
+    {t:'play',ref:1,title:'부산→싱가포르 40ft',key:'부킹·중량 균형'},
+    {t:'play',ref:2,title:'부산→도쿄 리퍼',key:'냉동 온도관리'},
+    {t:'quiz',ref:'reefer',title:'리퍼 설정온도·혼적',key:'온도'},
+    {t:'quiz',ref:'rollover',title:'성수기 롤오버',key:'부킹 리스크'} ]},
+  { rank:'과장', color:'#ecc94b', role:'원양·협상·원가 — 손익과 규정', items:[
+    {t:'play',ref:3,title:'부산→LA 40HC (원양)',key:'중량초과·원양'},
+    {t:'play',ref:4,title:'부산→두바이 (까다로움)',key:'협상·혼적'},
+    {t:'quiz',ref:'vgm',title:'과적·VGM',key:'중량 규정'},
+    {t:'quiz',ref:'demurrage',title:'데머리지·디텐션',key:'부킹 비용'},
+    {t:'quiz',ref:'incoterms',title:'FOB→FCA (Incoterms)',key:'무역조건'},
+    {t:'quiz',ref:'tempchem',title:'온도민감 화학물',key:'위험물·온도'} ]},
+  { rank:'팀장', color:'#e0705a', role:'사건 대응·종합 — 위기 관리', items:[
+    {t:'play',ref:5,title:'부산→로테르담 (최종·종합)',key:'대형 종합'},
+    {t:'quiz',ref:'yantian',title:'오신고 자기발열 화물',key:'DG 오신고 화재'},
+    {t:'quiz',ref:'undeclared',title:'미신고 반응성 위험물',key:'DG 미신고 폭발'},
+    {t:'quiz',ref:'lcl',title:'LCL 오염·검역',key:'혼재 클레임'} ]},
+];
+function J(k){ try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;} }
+const quizProg=()=>J('casestudy_prog')||{};
+function playBest(idx){ const a=J('train_lb_'+idx)||[]; if(!a.length) return null; return a.reduce((b,x)=>x.margin>b.margin?x:b, a[0]); }
+function itemStatus(it){
+  if(it.t==='quiz'){ const p=quizProg()[it.ref]; if(!p||p.pick===undefined||p.pick<0) return p&&p.rb?{s:'mid',txt:'근거만'}:{s:'no',txt:'미학습'};
+    return p.correct?{s:'ok',txt:'✅ 정답'+(p.rb&&p.rb.length? ` <span class="badge">근거 ${p.rb.length}</span>`:'')}:{s:'mid',txt:'❌ 오답(복습)'}; }
+  const b=playBest(it.ref); if(!b) return {s:'no',txt:'미체험'};
+  return {s:b.pass>=100?'ok':'mid', txt:`${b.margin}만 <span class="badge">⭐${b.stars}</span> <span class="badge">통과 ${b.pass}%</span>`};
+}
+function href(it){ return it.t==='play'?`train.html?case=${it.ref}`:`casestudy.html?open=${it.ref}`; }
+function renderTracks(){
+  document.getElementById('tracks').innerHTML=TRACKS.map(tr=>{
+    const items=tr.items.map(it=>{ const st=itemStatus(it);
+      return `<a class="item" href="${href(it)}"><div class="ic">${it.t==='play'?'🎮':'📚'}</div>
+        <div class="tt">${it.title}<br><span class="k">${it.t==='play'?'체험 과제':'판단 케이스'} · ${it.key}</span></div>
+        <div class="st"><span class="${st.s}">${st.txt}</span></div></a>`; }).join('');
+    const done=tr.items.filter(it=>itemStatus(it).s==='ok').length, pct=Math.round(done/tr.items.length*100);
+    return `<div class="card track" style="--c:${tr.color}">
+      <div class="thead"><span class="rk" style="color:${tr.color}">🎖 ${tr.rank}</span><span class="rl">${tr.role}</span>
+        <span style="flex:1"></span><span class="muted">${done}/${tr.items.length} 완료</span></div>
+      <div class="pbar"><div style="width:${pct}%"></div></div>${items}</div>`;
+  }).join('');
+}
+function renderKPIs(){
+  const qp=quizProg(); const attempted=Object.values(qp).filter(x=>x.pick>=0).length;
+  const correct=Object.values(qp).filter(x=>x.correct).length;
+  const totalQuiz=TRACKS.flatMap(t=>t.items).filter(i=>i.t==='quiz').length;
+  const playDone=TRACKS.flatMap(t=>t.items).filter(i=>i.t==='play').filter(i=>playBest(i.ref)).length;
+  const totalPlay=TRACKS.flatMap(t=>t.items).filter(i=>i.t==='play').length;
+  const allItems=TRACKS.flatMap(t=>t.items); const allDone=allItems.filter(itemStatus? i=>itemStatus(i).s==='ok':()=>false).length;
+  document.getElementById('kpis').innerHTML=`
+    <div class="kpi"><div class="v">${allDone}/${allItems.length}</div><div class="l">전체 완료</div></div>
+    <div class="kpi"><div class="v">${correct}/${attempted||0}</div><div class="l">퀴즈 정답/응시</div></div>
+    <div class="kpi"><div class="v">${playDone}/${totalPlay}</div><div class="l">체험 과제 통과</div></div>
+    <div class="kpi"><div class="v">${Math.round(allDone/allItems.length*100)}%</div><div class="l">과정 이수율</div></div>`;
+}
+function renderCats(){
+  const qp=quizProg(); const byCat={};
+  // casestudy 카테고리는 페이지 밖이라, 트랙의 quiz key로 대략 집계
+  const map={}; TRACKS.forEach(t=>t.items.filter(i=>i.t==='quiz').forEach(i=>{ map[i.ref]=i.key; }));
+  const rows=Object.keys(map).map(id=>{ const p=qp[id]; const done=p&&p.pick>=0; const ok=p&&p.correct;
+    return `<div class="catrow"><span>📚 ${map[id]}</span><span class="${ok?'':'muted'}">${done?(ok?'✅ 정답':'❌ 오답'):'미학습'}</span></div>`; }).join('');
+  document.getElementById('cats').innerHTML=rows;
+}
+// ☁ 클라우드 설정 (연결값만 저장 — 실제 동기화는 cloud.js/Supabase 연동 시)
+function loadCloud(){ const c=J('sb_config'); if(c){ document.getElementById('sbUrl').value=c.url||''; document.getElementById('sbKey').value=c.key||'';
+    document.getElementById('sbStatus').innerHTML=' <span style="color:#6bd08a">● 연결됨(설정 저장)</span>'; }
+  else document.getElementById('sbStatus').innerHTML=' <span class="muted">● 로컬 저장(미연결)</span>'; }
+window.saveCloud=()=>{ const url=document.getElementById('sbUrl').value.trim(), key=document.getElementById('sbKey').value.trim();
+  if(!url||!key){ alert('URL과 publishable key를 입력하세요'); return; }
+  localStorage.setItem('sb_config',JSON.stringify({url,key})); loadCloud(); };
+window.clearCloud=()=>{ localStorage.removeItem('sb_config'); document.getElementById('sbUrl').value=''; document.getElementById('sbKey').value=''; loadCloud(); };
+
+renderKPIs(); renderTracks(); renderCats(); loadCloud();
+</script>
+</body>
+</html>
