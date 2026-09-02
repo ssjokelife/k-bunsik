@@ -83,8 +83,9 @@
 <div id="bottom"></div>
 <div id="modal"><div class="box" id="modalBody"></div></div>
 <div id="stageSelect"><div style="max-width:470px;margin:0 auto;width:100%">
-  <h2>🚢 방과후 포워딩</h2>
-  <div class="cash">누적 수익 <b id="ssCash">0</b>만원 · 작은 포워더의 성장기</div>
+  <h2>🚢 방과후 콘솔 — 신입사원 편</h2>
+  <div class="cash" id="ssHeader"></div>
+  <div id="ssActions" style="margin:7px 0"></div>
   <div id="stageList"></div>
 </div></div>
 <div id="inspector"><div class="ibox">
@@ -238,6 +239,21 @@ const STAGES = [
     ] },
 ];
 let progress; try{ progress=JSON.parse(localStorage.getItem('cargo_progress')||'{"cleared":0,"cash":0}'); }catch(e){ progress={cleared:0,cash:0}; }
+// 🎓 커리어·재무 메타 (본편 = 콘솔사 신입사원)
+progress.savings=progress.savings??0; progress.rankIdx=progress.rankIdx??0; progress.certs=progress.certs??{};
+const RANKS=['신입','대리','과장','팀장','부사장'];
+const SALARY=[220,300,420,600,900];   // 직급별 월 기본급(만원)
+const LIVING=150;                       // 월 생존비(부산 1인가구 실측)
+const CERTS={
+  forklift:{name:'지게차운전기능사', cost:65,  icon:'🚜', desc:'롤오버 재작업비 반값'},
+  english: {name:'비즈니스영어',     cost:100, icon:'🗣', desc:'단가협상 결렬 위험↓'},
+  logi:    {name:'물류관리사',       cost:150, icon:'📦', desc:'성과급 +20%'},
+  hazmat:  {name:'위험물기능사',     cost:200, icon:'☣️', desc:'위험물 격리 벌금 면제'},
+};
+const hasCert=k=>!!progress.certs[k];
+const negoUnlocked=()=>progress.rankIdx>=2 || hasCert('english');   // 과장↑ 또는 영어자격
+let negoActive=false;
+function saveProgress(){ try{ localStorage.setItem('cargo_progress',JSON.stringify(progress)); }catch(e){} }
 let curStage=null, curStageIdx=-1;
 
 // ═══ 화물 3D 형상 빌더 (원점 중심, w×h×d 셀) ═══
@@ -358,7 +374,9 @@ window.cycleContainer=()=>{ const ids=Object.keys(CONTAINERS); switchContainer(i
 window.renderStageSelect=()=>{
   document.getElementById('modal').style.display='none';
   document.getElementById('inspector').style.display='none';
-  document.getElementById('ssCash').textContent=progress.cash;
+  const rank=RANKS[progress.rankIdx], certList=Object.keys(progress.certs).filter(k=>progress.certs[k]).map(k=>CERTS[k].icon).join('');
+  document.getElementById('ssHeader').innerHTML=`👤 <b>${rank}</b> · 💰 저축 <b>${progress.savings}만</b> · 월급 ${SALARY[progress.rankIdx]}만 · 회사 마진 ${progress.cash}만${certList?` · 자격 ${certList}`:''}`;
+  document.getElementById('ssActions').innerHTML=`<button onclick="renderCerts()" style="font-size:12.5px;padding:7px 12px">📚 자기계발 (자격증)</button>`;
   document.getElementById('stageList').innerHTML=STAGES.map((s,i)=>{
     const cleared=i<progress.cleared, cur=i===progress.cleared, C=CONTAINERS[s.con];
     return `<div class="stg ${cleared?'clr':cur?'cur':'lock'}" ${i<=progress.cleared?`onclick="startStage(${i})"`:''}>
@@ -374,21 +392,40 @@ window.startStage=(i)=>{
   curStageIdx=i; curStage=STAGES[i];
   applyContainerSpec(curStage.con); buildContainer();
   document.getElementById('stageSelect').style.display='none';
-  accepted=new Set(); clearAll(); resetView();
+  accepted=new Set(); negoActive=false; clearAll(); resetView();
   renderBooking();
 };
 window.retryStage=()=>{ startStage(curStageIdx); };
+// ═══ 📚 자기계발 (자격증) ═══
+window.renderCerts=()=>{
+  const rows=Object.keys(CERTS).map(k=>{ const c=CERTS[k], owned=hasCert(k), afford=progress.savings>=c.cost;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px;margin:5px 0;border-radius:9px;border:1px solid ${owned?'#7fd18a':'#3a4150'}">`+
+      `<div style="font-size:20px">${c.icon}</div>`+
+      `<div style="flex:1;text-align:left;font-size:12.5px"><b>${c.name}</b><br><span style="color:#8a93a5;font-size:11px">${c.desc}</span></div>`+
+      `<div>${owned?'<span style="color:#7fd18a">✅ 보유</span>':`<button ${afford?'':'disabled style="opacity:.4"'} onclick="buyCert('${k}')">${c.cost}만</button>`}</div></div>`;
+  }).join('');
+  document.getElementById('modalBody').innerHTML=
+    `<h2>📚 자기계발</h2>`+
+    `<div style="font-size:12px;color:#8a93a5">💰 저축 <b>${progress.savings}만</b> · 자격증에 투자하면 벌금·비용이 줄어요</div><br>`+
+    rows+
+    `<div style="font-size:11px;color:#99a;margin-top:6px">💡 월급을 아껴 저축→자격증 투자→벌금·비용↓. 이 저축이 훗날 '외전 창업'의 종잣돈이 됩니다.</div>`+
+    `<button onclick="renderStageSelect()">← 스케줄로</button>`;
+  document.getElementById('modal').style.display='flex';
+};
+window.buyCert=(k)=>{ const c=CERTS[k]; if(hasCert(k)||progress.savings<c.cost) return; progress.savings-=c.cost; progress.certs[k]=true; saveProgress(); renderCerts(); };
+window.toggleNego=()=>{ negoActive=!negoActive; renderBooking(); };
 // ═══ 📑 부킹 화면 — 화주 오퍼 중 골라 담기 (합계 > 박스) ═══
 window.toggleBooking=(bi)=>{ if(accepted.has(bi)) accepted.delete(bi); else accepted.add(bi); renderBooking(); };
 function renderBooking(){
   const s=curStage, C=CONTAINERS[s.con], L=LANES[s.to];
   const capCBM=Math.round(CW*CD*CH*CELLV);
+  const eRate=L.rate*(negoActive?1.12:1);   // 단가협상 시 +12%
   let accRT=0, accCBM=0, accItems=0, accRev=0;
-  s.bookings.forEach((b,bi)=>{ if(accepted.has(bi)){ const rt=bookingRT(b); accRT+=rt; accItems+=b.cargo.length; accRev+=rt*L.rate; accCBM+=cbmOf(b.cargo.reduce((a,t)=>a+TYPES[t].w*TYPES[t].d*TYPES[t].h,0)); } });
+  s.bookings.forEach((b,bi)=>{ if(accepted.has(bi)){ const rt=bookingRT(b); accRT+=rt; accItems+=b.cargo.length; accRev+=rt*eRate; accCBM+=cbmOf(b.cargo.reduce((a,t)=>a+TYPES[t].w*TYPES[t].d*TYPES[t].h,0)); } });
   accRT=Math.round(accRT*10)/10; accCBM=Math.round(accCBM*10)/10;
   const rows=s.bookings.map((b,bi)=>{
     const on=accepted.has(bi), col='#'+whoColorOf(bi).toString(16).padStart(6,'0');
-    const rt=bookingRT(b), rev=Math.round(rt*L.rate);
+    const rt=bookingRT(b), rev=Math.round(rt*eRate);
     const flags=[]; if(b.cargo.some(t=>TYPES[t].hazmat))flags.push('☣️위험물'); if(b.cargo.some(t=>TYPES[t].frozen||TYPES[t].chilled))flags.push('❄️냉동'); if(b.cargo.some(t=>TYPES[t].fragile))flags.push('⚠️파손'); if(b.cargo.some(t=>TYPES[t].heavy))flags.push('🏋중량');
     const icons=b.cargo.map(t=>TYPES[t].icon).join('');
     return `<div onclick="toggleBooking(${bi})" style="display:flex;align-items:center;gap:8px;padding:7px 9px;margin:4px 0;border-radius:9px;cursor:pointer;border:2px solid ${on?col:'#3a4150'};background:${on?'rgba(120,160,220,.12)':'transparent'}">`+
@@ -404,7 +441,8 @@ function renderBooking(){
   if(allT.some(t=>TYPES[t].fragile)) cons.push('⚠️ 파손품=맨 위');
   document.getElementById('modalBody').innerHTML=
     `<h2>📑 Stage ${curStageIdx+1} · 부킹</h2>`+
-    `<div style="font-size:12px;color:#8a93a5">${s.when} · ${C.icon} ${C.name} · 부산→${s.to} · $${L.rate}/R.T · 박스 $${L.box[s.con]}</div>`+
+    `<div style="font-size:12px;color:#8a93a5">${s.when} · ${C.icon} ${C.name} · 부산→${s.to} · $${Math.round(eRate)}/R.T${negoActive?'🤝':''} · 박스 $${L.box[s.con]}</div>`+
+    (negoUnlocked()?`<div style="margin:5px 0"><button onclick="toggleNego()" style="font-size:12px;padding:6px 11px;${negoActive?'background:#e8734f;color:#fff':''}">🤝 단가협상 ${negoActive?'ON (+12% · 일부 화주 이탈 위험)':'OFF'}</button></div>`:'')+
     `<div style="font-size:12px;margin:6px 0;color:#667">${s.brief}</div>`+
     `<div style="max-height:40vh;overflow:auto;margin:0 -4px">${rows}</div>`+
     `<div style="font-size:12.5px;margin-top:8px;padding:8px;border-radius:9px;background:rgba(120,140,180,.12)">수락 <b>${accItems}개 · ${accRT} R.T</b> · 예상 운임 <b>$${Math.round(accRev)}</b><br><span style="color:${over?'#e0714f':'#8a93a5'}">공간 ${accCBM}/${capCBM} CBM${over?' ⚠️ 초과 — 다 못 실어요':''}</span> · 🎯 마진 <b>${s.goal.margin}만+</b> · ${s.goal.maxDmg===0?'무손상':'손상 '+s.goal.maxDmg+' 이내'}</div>`+
@@ -414,7 +452,15 @@ function renderBooking(){
     `<button onclick="backToStages()" style="background:#5a6270">🗂 스케줄로</button>`;
   document.getElementById('modal').style.display='flex';
 }
-window.startLoading=()=>{ if(accepted.size===0) return; loadManifest(); curSel=nextUnplaced(); document.getElementById('modal').style.display='none'; updateHUD(); flash('화물 목록에서 실을 것을 골라 바닥에 탭!'); };
+window.startLoading=()=>{ if(accepted.size===0) return;
+  if(negoActive){ const drop=hasCert('english')?0.08:0.15, gone=[];
+    [...accepted].forEach(bi=>{ if(Math.random()<drop){ accepted.delete(bi); gone.push(curStage.bookings[bi].who); } });
+    if(gone.length) flash(`🤝 협상 결렬 — ${gone.join(', ')} 이탈`);
+    if(accepted.size===0){ renderBooking(); return; }
+  }
+  loadManifest(); curSel=nextUnplaced(); document.getElementById('modal').style.display='none'; updateHUD();
+  if(!negoActive) flash('화물 목록에서 실을 것을 골라 바닥에 탭!');
+};
 
 // ═══ 상태 ═══
 const occ = {};   // "i,j,k" -> cargoId
@@ -527,16 +573,21 @@ window.undo=()=>{   // 선택 화물 제거 또는 마지막 것 → 화물 목�
 };
 
 // ═══ 출항 & 손상 판정 ═══
+const SEA_NAME=['근해(잔잔)','중거리(보통)','원양(거친 롤링)'];
 window.depart=()=>{
   if(departed) return;
   if(!placed.length){ flash('화물을 먼저 실으세요!'); return; }
   departed=true; doorTarget=0;   // 문 닫기
-  flash('⚓ 출항! 항해 중…');
+  const sea=curStage?LANES[curStage.to].sea:1;
+  flash(`⚓ 출항! ${curStage?'부산→'+curStage.to+' ':''}🌊 ${SEA_NAME[sea]} 항해 중…`);
   setTimeout(sailAndJudge, 1400);
 };
-let rolling=0;
+let rolling=0, rollAmp=0.09;
 function sailAndJudge(){
-  rolling=3.2;   // 3.2초 롤링
+  const sea=curStage?LANES[curStage.to].sea:1;
+  rolling=2.6+sea*0.9; rollAmp=0.06+sea*0.05;   // 원양일수록 오래·크게 롤링
+  const skewed=Math.abs(balanceState().lr)>0.32;
+  const shakeP=0.30+sea*0.16+(skewed?0.15:0);   // 항해강도·편중이 흔들림 확률 결정
   setTimeout(()=>{
     // ── 손상 판정 ──
     const cbmUsed = placed.reduce((a,p)=>a+p.w*p.d*p.h,0);
@@ -550,7 +601,7 @@ function sailAndJudge(){
       if(!hit && !t.heavy && !p.lashed){
         let topOpen = p.k+p.h<CH;
         if(topOpen){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++) if(occ[key(p.i+di,p.j+dj,p.k+p.h)]!==undefined){ topOpen=false; break; } }
-        if(topOpen && sideBlocked(p)<2 && Math.random()<0.55) hit=true;
+        if(topOpen && sideBlocked(p)<2 && Math.random()<shakeP) hit=true;
       }
       if(hit) p.damaged=true;
     }
@@ -590,7 +641,7 @@ function showResult(cbmUsed){
   if(curStage){   // 📅 스테이지 판정 — 전량 적재 + 손상 제한, 그리고 손익 정산
     const g=curStage.goal;
     // 💱 LCL 혼재 마진 정산 (R.T 청구 − 박스값 − 부대비 − 클레임 − 롤오버)
-    const L=LANES[curStage.to], fx=curStage.fx, usdRate=L.rate, box=L.box[curCon];
+    const L=LANES[curStage.to], fx=curStage.fx, usdRate=L.rate*(negoActive?1.12:1), box=L.box[curCon];
     const placedRT=Math.round(placed.reduce((a,p)=>a+rtOf(p.type),0)*10)/10;
     const incomeUSD=Math.round(placedRT*usdRate);                          // 화주 청구 운임(USD)
     const dgN=placed.filter(p=>TYPES[p.type].hazmat).length, dgUsd=dgN*50;  // USD 위험물 할증
@@ -601,28 +652,44 @@ function showResult(cbmUsed){
     const reefer=CONTAINERS[curCon].reefer?40:0;
     const lashN=placed.filter(p=>p.lashed).length, lash=lashN*12;
     const claims=dmgList.reduce((a,p)=>a+(TYPES[p.type].val||30),0);        // 손상 = 화주 클레임 배상
-    const rollover=INV.length-placed.length, rollFee=rollover*5;            // 수락했는데 못 실음 = 롤오버 재작업비
+    const rollover=INV.length-placed.length, rollFee=Math.round(rollover*(hasCert('forklift')?2.5:5)); // 🚜 지게차 자격 시 반값
     const totalWt=Math.round(placed.reduce((a,p)=>a+TYPES[p.type].wt,0)*10)/10;
     const payload=CONTAINERS[curCon].payload, overWt=Math.max(0,Math.round((totalWt-payload)*10)/10);
     const overFine=Math.round(overWt*30);                                  // 중량초과 벌금 ₩30만/톤
     const bal=balanceState(), lrSkew=Math.abs(bal.lr), balFine=lrSkew>0.32? Math.round((lrSkew-0.32)*180):0;  // 좌우 편중적재 벌금(전복축)
-    const dgV=dgViolations(), dgFine=dgV*15;                               // 위험물 격리 위반 ₩15만/건
+    const dgV=dgViolations(), dgFine=hasCert('hazmat')?0:dgV*15;           // ☣️ 위험물 자격 시 격리 벌금 면제
     const spoiled=dmgList.filter(p=>p.spoiled).length;                     // 온도 혼적 동해
     const margin=Math.round(usdNetKrw + opsMargin + doc - reefer - lash - claims - overFine - rollFee - balFine - dgFine);
     const fillPct=Math.round(rate*100);
     const pass = margin>=g.margin && dmgList.length<=g.maxDmg;
-    let earned=0;
-    if(pass && curStageIdx===progress.cleared){ progress.cleared++; progress.cash+=margin; earned=margin;
-      try{ localStorage.setItem('cargo_progress',JSON.stringify(progress)); }catch(e){} }
+    let earned=0, payslip=null;
+    if(pass && curStageIdx===progress.cleared){
+      progress.cleared++; progress.cash+=margin; earned=margin;
+      const bonus=Math.round(margin*0.15*(hasCert('logi')?1.2:1));         // 성과급(마진 연동, 물류관리사 +20%)
+      const salary=SALARY[progress.rankIdx], net=salary+bonus-LIVING;      // 월급+성과급−생존비
+      progress.savings+=net;
+      const oldRank=progress.rankIdx; progress.rankIdx=Math.min(RANKS.length-1, progress.cleared);   // 승진
+      payslip={salary,bonus,net,promoted: progress.rankIdx>oldRank? RANKS[progress.rankIdx]:null};
+      saveProgress();
+    }
     const last = curStageIdx+1>=STAGES.length;
     const costBits=[reefer?`❄️전기 ${reefer}`:'', lash?`🔒라싱 ${lash}`:'', claims?`⚠️클레임 ${claims}${spoiled?`(동해 ${spoiled})`:''}`:'', overFine?`⚖중량초과 ${overFine}`:'', balFine?`↔️편중 ${balFine}`:'', dgFine?`☣️격리위반 ${dgFine}`:'', rollFee?`📦롤오버 ${rollFee}`:''].filter(Boolean).join(' · ');
+    // 🔍 개장 검수 — 화주별 결과 (무손상/파손/롤오버)
+    const inspRows=curStage.bookings.map((b,bi)=>{ if(!accepted.has(bi)) return null;
+      const mine=placed.filter(p=>p.whoi===bi), dmg=mine.filter(p=>p.damaged).length, rolled=b.cargo.length-mine.length;
+      const col='#'+whoColorOf(bi).toString(16).padStart(6,'0');
+      const st=dmg>0?`❌파손${dmg}`:rolled>0?`⚠️롤오버${rolled}`:'✅무손상';
+      return `<span style="display:inline-block;font-size:10.5px;margin:2px;padding:2px 6px;border-radius:6px;border:1px solid ${col}"><span style="color:${col}">●</span> ${b.who} ${st}</span>`;
+    }).filter(Boolean).join('');
     mB.innerHTML=
       `<h2>${pass?'✅ 선적 완료!':'❌ 목표 미달'}</h2>`+
-      `부산→${curStage.to} · 화주 <b>${blCount}곳</b> · 적재 <b>${placed.length}개</b>${rollover?` <span style="color:#e0714f">(롤오버 ${rollover})</span>`:''} · ${cbmOf(cbmUsed)}CBM(${fillPct}%) · <b>${placedRT} R.T</b> · ${totalWt}/${payload}t${overWt?' ⚠️':''} · 손상 <b>${dmgList.length}</b>(허용 ${g.maxDmg})<br><br>`+
+      `부산→${curStage.to} · 화주 <b>${blCount}곳</b> · 적재 <b>${placed.length}개</b>${rollover?` <span style="color:#e0714f">(롤오버 ${rollover})</span>`:''} · ${cbmOf(cbmUsed)}CBM(${fillPct}%) · <b>${placedRT} R.T</b> · ${totalWt}/${payload}t${overWt?' ⚠️':''} · 손상 <b>${dmgList.length}</b>(허용 ${g.maxDmg})<br>`+
+      `<div style="margin:6px 0;line-height:1.9">🔍 개장 검수: ${inspRows}</div>`+
       (pass
-        ? `<div style="font-size:12px;color:#666;text-align:left;line-height:1.7">💵 운임 <b>${placedRT}R.T × $${usdRate} = $${incomeUSD}</b> − 박스 $${box}${dgUsd?` − ☣️DG $${dgUsd}`:''} = $${usdNet} × ₩${fx} → ${Math.round(usdNetKrw)}만<br>➕ 부대마진 CFS·THC ${opsMargin}만 · 서류 ${doc}만(B/L ${blCount}건)${costBits?`<br>➖ ${costBits}`:''}</div>`+
+        ? `<div style="font-size:12px;color:#666;text-align:left;line-height:1.7">💵 운임 <b>${placedRT}R.T × $${Math.round(usdRate)}${negoActive?'🤝':''} = $${incomeUSD}</b> − 박스 $${box}${dgUsd?` − ☣️DG $${dgUsd}`:''} = $${usdNet} × ₩${fx} → ${Math.round(usdNetKrw)}만<br>➕ 부대마진 CFS·THC ${opsMargin}만 · 서류 ${doc}만(B/L ${blCount}건)${costBits?`<br>➖ ${costBits}`:''}</div>`+
           `<div style="font-size:22px;margin-top:6px">혼재 마진 <b style="color:${margin>=0?'#c05a46':'#b04040'}">${margin>=0?'+':''}${margin}만원</b> <span style="font-size:12px;color:#999">/ 목표 ${g.margin}만</span></div>`+
-          `<div style="font-size:11px;color:#999">💡 고R.T 화주를 골라 꽉 채울수록 마진↑</div>누적 수익 <b>${progress.cash}만원</b><br><br>`+
+          `<div style="font-size:11px;color:#999">💡 고R.T 화주를 골라 꽉 채울수록 마진↑</div>`+
+          (payslip?`<div style="font-size:12px;background:rgba(120,140,180,.14);border-radius:9px;padding:8px;margin:7px 0;text-align:left">🧾 <b>이번 달 급여명세</b> (${RANKS[progress.rankIdx]})<br>월급 ${payslip.salary} + 성과급 ${payslip.bonus} − 생존비 ${LIVING} = <b style="color:${payslip.net>=0?'#c05a46':'#b04040'}">저축 ${payslip.net>=0?'+':''}${payslip.net}만</b> · 누적 저축 <b>${progress.savings}만</b>${payslip.promoted?`<br>🎉 <b>${payslip.promoted}</b>(으)로 승진!`:''}</div>`:'')+
           (last?`<div style="font-size:17px;color:#c05a46">🏆 모든 선적 완수 — 콘솔사 성공!</div><br>`:`<button onclick="startStage(${curStageIdx+1})">▶ 다음 스테이지</button>`)
         : `<div style="color:#b04040;font-size:13.5px">${dmgList.length>g.maxDmg?`손상이 많아요 (${dmgList.length} > ${g.maxDmg}) — ${spoiled?'🌡 냉동+냉장 혼적으로 청과가 얼었어요(동해). 한 온도만 받으세요. ':''}유리는 맨 위·중량은 바닥·벽/이웃 고정이나 🔒라싱`:`혼재 마진이 목표에 못 미쳐요 (${margin} < ${g.margin}만) — ${balFine?'↔️편중적재 벌금이 커요(무게 좌우·앞뒤 고르게). ':''}${dgFine?'☣️위험물은 바닥에·위에 아무것도 얹지 마세요. ':''}고R.T 화주를 받아 꽉 채우거나 롤오버를 줄이세요`}</div><br>`+
           `<button onclick="retryStage()">🔄 다시 부킹</button>`)+
@@ -819,7 +886,7 @@ renderer.setAnimationLoop(()=>{
   // 문
   if(Math.abs(doorOpen-doorTarget)>0.001){ doorOpen+=(doorTarget-doorOpen)*0.12; for(const d of doors) d.p.rotation.y=-d.sign*doorOpen*Math.PI*0.82; }
   // 항해 롤링
-  if(rolling>0){ rolling-=1/60; t+=0.08; con.rotation.z=Math.sin(t)*0.09; con.rotation.x=Math.sin(t*0.7)*0.05; if(rolling<=0){con.rotation.z=0;con.rotation.x=0;} }
+  if(rolling>0){ rolling-=1/60; t+=0.08; con.rotation.z=Math.sin(t)*rollAmp; con.rotation.x=Math.sin(t*0.7)*rollAmp*0.55; if(rolling<=0){con.rotation.z=0;con.rotation.x=0;} }
   // 🤖 리플레이 낙하 연출
   for(const p of placed){ if(p.fall>0){ p.mesh.position.y=(0.06+(p.k+p.h/2)*CELLY)+p.fall; p.fall*=0.8; if(p.fall<0.02){ p.fall=0; p.mesh.position.y=0.06+(p.k+p.h/2)*CELLY; } } }
   renderer.render(scene,camera);
