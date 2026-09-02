@@ -255,6 +255,8 @@ const hasCert=k=>!!progress.certs[k];
 const negoUnlocked=()=>progress.rankIdx>=2 || hasCert('english');   // 과장↑ 또는 영어자격
 let negoActive=false;
 function saveProgress(){ try{ localStorage.setItem('cargo_progress',JSON.stringify(progress)); }catch(e){} }
+// 🖥️ 워크스테이션 셸 연동 — 케이스가 게임에 주는 영향(BAF 할증·스페이스 부족·마감 지연)
+window.wsMods={usdCostAdd:0, tightSpace:false, late:{}};
 let curStage=null, curStageIdx=-1;
 
 // ═══ 화물 3D 형상 빌더 (원점 중심, w×h×d 셀) ═══
@@ -660,21 +662,23 @@ function showResult(cbmUsed){
     const placedRT=Math.round(placed.reduce((a,p)=>a+rtOf(p.type),0)*10)/10;
     const incomeUSD=Math.round(placedRT*usdRate);                          // 화주 청구 운임(USD)
     const dgN=placed.filter(p=>TYPES[p.type].hazmat).length, dgUsd=dgN*50;  // USD 위험물 할증
-    const usdNet=incomeUSD-box-dgUsd;                                       // USD 순액 (운임 − 박스 − DG)
+    const baf=Math.max(0,Math.round(window.wsMods.usdCostAdd||0));          // 🚢 BAF 유류할증(케이스 적용, USD)
+    const usdNet=incomeUSD-box-dgUsd-baf;                                   // USD 순액 (운임 − 박스 − DG − BAF)
     const usdNetKrw=usdNet*fx/10000;                                        // 만원
     const opsMargin=Math.round(placedRT*0.2*10)/10;                         // CFS+THC 마진 ₩2천/R.T
     const blCount=new Set(placed.map(p=>p.whoi)).size, doc=blCount*4;       // 화주별 House B/L ₩4만 (수입)
     const reefer=CONTAINERS[curCon].reefer?40:0;
     const lashN=placed.filter(p=>p.lashed).length, lash=lashN*12;
     const claims=dmgList.reduce((a,p)=>a+(TYPES[p.type].val||30),0);        // 손상 = 화주 클레임 배상
-    const rollover=INV.length-placed.length, rollFee=Math.round(rollover*(hasCert('forklift')?2.5:5)); // 🚜 지게차 자격 시 반값
+    const rollover=INV.length-placed.length, rollFee=Math.round(rollover*(hasCert('forklift')?2.5:5)*(window.wsMods.tightSpace?1.5:1)); // 🚜 지게차 반값 · 스페이스부족 1.5배
+    const lateFine=window.wsMods.late[curStageIdx]?30:0;                    // ⏰ 마감 지연 위약금
     const totalWt=Math.round(placed.reduce((a,p)=>a+TYPES[p.type].wt,0)*10)/10;
     const payload=CONTAINERS[curCon].payload, overWt=Math.max(0,Math.round((totalWt-payload)*10)/10);
     const overFine=Math.round(overWt*30);                                  // 중량초과 벌금 ₩30만/톤
     const bal=balanceState(), lrSkew=Math.abs(bal.lr), balFine=lrSkew>0.32? Math.round((lrSkew-0.32)*180):0;  // 좌우 편중적재 벌금(전복축)
     const dgV=dgViolations(), dgFine=hasCert('hazmat')?0:dgV*15;           // ☣️ 위험물 자격 시 격리 벌금 면제
     const spoiled=dmgList.filter(p=>p.spoiled).length;                     // 온도 혼적 동해
-    const margin=Math.round(usdNetKrw + opsMargin + doc - reefer - lash - claims - overFine - rollFee - balFine - dgFine);
+    const margin=Math.round(usdNetKrw + opsMargin + doc - reefer - lash - claims - overFine - rollFee - balFine - dgFine - lateFine);
     const fillPct=Math.round(rate*100);
     const pass = margin>=g.margin && dmgList.length<=g.maxDmg;
     let earned=0, payslip=null;
@@ -696,7 +700,9 @@ function showResult(cbmUsed){
     }
     const starStr=s=>'★'.repeat(s)+'☆'.repeat(3-s);
     const last = curStageIdx+1>=STAGES.length;
-    const costBits=[reefer?`❄️전기 ${reefer}`:'', lash?`🔒라싱 ${lash}`:'', claims?`⚠️클레임 ${claims}${spoiled?`(동해 ${spoiled})`:''}`:'', overFine?`⚖중량초과 ${overFine}`:'', balFine?`↔️편중 ${balFine}`:'', dgFine?`☣️격리위반 ${dgFine}`:'', rollFee?`📦롤오버 ${rollFee}`:''].filter(Boolean).join(' · ');
+    // 🖥️ 셸에 결과 통지 (메신저·알림·서류 갱신)
+    try{ if(window.parent&&window.parent!==window&&window.parent.wsOnResult) window.parent.wsOnResult(curStageIdx,{pass,margin,stars,dmg:dmgList.length,promoted:payslip&&payslip.promoted,last}); }catch(e){}
+    const costBits=[reefer?`❄️전기 ${reefer}`:'', lash?`🔒라싱 ${lash}`:'', claims?`⚠️클레임 ${claims}${spoiled?`(동해 ${spoiled})`:''}`:'', overFine?`⚖중량초과 ${overFine}`:'', balFine?`↔️편중 ${balFine}`:'', dgFine?`☣️격리위반 ${dgFine}`:'', rollFee?`📦롤오버 ${rollFee}`:'', baf?`🚢BAF $${baf}`:'', lateFine?`⏰지연 ${lateFine}`:''].filter(Boolean).join(' · ');
     // 🔍 개장 검수 — 화주별 결과 (무손상/파손/롤오버)
     const inspRows=curStage.bookings.map((b,bi)=>{ if(!accepted.has(bi)) return null;
       const mine=placed.filter(p=>p.whoi===bi), dmg=mine.filter(p=>p.damaged).length, rolled=b.cargo.length-mine.length;
@@ -908,6 +914,36 @@ addEventListener('pointerup',()=>{ idrag=false; });
 function resize(){ renderer.setSize(innerWidth,innerHeight); camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); if(insActive) sizeIns(); }
 addEventListener('resize',resize);
 loadManifest(); resize(); resetView(); updateHUD();
+// ═══ 🖥️ 워크스테이션 API (셸이 iframe으로 호출) ═══
+window.wsStageInfo=(idx)=>{
+  const s=STAGES[idx]; if(!s) return null;
+  applyContainerSpec(s.con);
+  const L=LANES[s.to], C=CONTAINERS[s.con], cap=Math.round(CW*CD*CH*CELLV);
+  return { idx, to:s.to, con:s.con, conName:C.name, conIcon:C.icon, when:s.when, client:s.client,
+    rate:L.rate, box:L.box[s.con], fx:s.fx, goal:s.goal, cap, reefer:!!C.reefer, payload:C.payload,
+    curCleared:progress.cleared, rankIdx:progress.rankIdx, negoUnlocked:negoUnlocked(),
+    bookings: s.bookings.map((b,bi)=>({ bi, who:b.who, cargo:b.cargo.slice(), count:b.cargo.length,
+      rt:bookingRT(b), rev:Math.round(bookingRT(b)*L.rate),
+      cbm:cbmOf(b.cargo.reduce((a,t)=>a+TYPES[t].w*TYPES[t].d*TYPES[t].h,0)),
+      flags:{dg:b.cargo.some(t=>TYPES[t].hazmat), rf:b.cargo.some(t=>TYPES[t].frozen||TYPES[t].chilled),
+        fr:b.cargo.some(t=>TYPES[t].fragile), hv:b.cargo.some(t=>TYPES[t].heavy),
+        frozen:b.cargo.some(t=>TYPES[t].frozen), chilled:b.cargo.some(t=>TYPES[t].chilled)} })) };
+};
+window.wsBeginStage=(idx, acc, nego)=>{
+  if(idx>progress.cleared) return false;
+  curStageIdx=idx; curStage=STAGES[idx];
+  applyContainerSpec(curStage.con); buildContainer();
+  document.getElementById('stageSelect').style.display='none';
+  document.getElementById('modal').style.display='none';
+  negoActive=!!nego; accepted=new Set(acc||[]);
+  clearAll(); curSel=nextUnplaced(); resetView(); updateHUD();
+  flash('📋 업무 시스템 배정 건 — 화물 목록에서 골라 바닥에 탭!');
+  return true;
+};
+window.wsAddBooking=(idx, booking)=>{ const s=STAGES[idx]; if(!s) return 0; s.bookings.push(booking); return s.bookings.length; };
+window.wsCargoName=(t)=>TYPES[t]?TYPES[t].name:t;
+window.wsCargoIcon=(t)=>TYPES[t]?TYPES[t].icon:'📦';
+
 renderStageSelect();   // 🚢 시작은 스테이지 선택 화면부터
 if(!progress.introSeen) showIntro();   // 첫 방문 온보딩
 let t=0;
