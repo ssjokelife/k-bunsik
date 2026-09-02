@@ -71,6 +71,7 @@
   <button onclick="backToStages()">🗂 스케줄</button>
   <button onclick="rotateCargo()">↻ 회전</button>
   <button onclick="undo()">↩ 취소</button>
+  <button onclick="lashSel()">🔒 라싱</button>
   <button onclick="inspectSel()">🔍 보기</button>
   <button onclick="aiDemo()">🤖 AI</button>
   <button onclick="resetView()">🎥</button>
@@ -101,10 +102,10 @@ import * as THREE from 'three';
 
 // ═══ 컨테이너 타입 (ISO 실측·격자가 내부를 꽉 채운다) ═══
 const CONTAINERS = {
-  '20gp': { name:'20ft 일반',     L:5.90,  W:2.35, H:2.39, cw:8,  cd:3, ch:3, icon:'🟦', desc:'가장 흔한 표준 · 33 CBM' },
-  '40gp': { name:'40ft 일반',     L:12.03, W:2.35, H:2.39, cw:16, cd:3, ch:3, icon:'🟩', desc:'길이 2배 · 67 CBM' },
-  '40hc': { name:'40ft 하이큐브', L:12.03, W:2.35, H:2.69, cw:16, cd:3, ch:4, icon:'🟪', desc:'천장 30cm↑ · 76 CBM' },
-  '20rf': { name:'20ft 냉동',     L:5.44,  W:2.29, H:2.27, cw:7,  cd:3, ch:3, icon:'❄️', desc:'단열벽 · 용적↓ · 28 CBM', reefer:true },
+  '20gp': { name:'20ft 일반',     L:5.90,  W:2.35, H:2.39, cw:8,  cd:3, ch:3, icon:'🟦', desc:'가장 흔한 표준 · 33 CBM', thc:20 },
+  '40gp': { name:'40ft 일반',     L:12.03, W:2.35, H:2.39, cw:16, cd:3, ch:3, icon:'🟩', desc:'길이 2배 · 67 CBM', thc:34 },
+  '40hc': { name:'40ft 하이큐브', L:12.03, W:2.35, H:2.69, cw:16, cd:3, ch:4, icon:'🟪', desc:'천장 30cm↑ · 76 CBM', thc:38 },
+  '20rf': { name:'20ft 냉동',     L:5.44,  W:2.29, H:2.27, cw:7,  cd:3, ch:3, icon:'❄️', desc:'단열벽 · 용적↓ · 28 CBM', reefer:true, thc:28 },
 };
 let curCon='20gp';
 let CON, CW, CD, CH, CELLX, CELLY, CELLZ, CELLV, OX, OZ;
@@ -305,7 +306,8 @@ window.startStage=(i)=>{
     `<h2>📋 Stage ${i+1} — ${curStage.client}</h2>`+
     `<div style="font-size:13px;color:#666">${curStage.when} · ${C.icon} ${C.name} FCL</div><br>`+
     `${curStage.brief}<br><br>`+
-    `<div style="font-size:13px">🎯 목표: 화물 <b>${curStage.cargo.length}개 전량 적재</b> · ${curStage.goal.maxDmg===0?'<b>무손상</b>':'손상 '+curStage.goal.maxDmg+'개 이내'}<br>💰 성공 시 수수료 <b>${curStage.fee}만원</b></div>`+
+    `<div style="font-size:13px">🎯 목표: 화물 <b>${curStage.cargo.length}개 전량 적재</b> · ${curStage.goal.maxDmg===0?'<b>무손상</b>':'손상 '+curStage.goal.maxDmg+'개 이내'}<br>💰 운임 <b>${curStage.fee}만원</b> − 부대비용(THC·서류·할증·데드프레이트) = 순이익</div>`+
+    `<div style="font-size:11.5px;color:#888;margin-top:6px">💡 벽·이웃에 붙여 쌓으면 흔들림 없이 안전 — 안 되면 🔒라싱(12만/개). 꽉 채울수록 데드프레이트↓</div>`+
     `<button onclick="document.getElementById('modal').style.display='none'">🏗 작업 시작!</button>`;
   document.getElementById('modal').style.display='flex';
 };
@@ -368,7 +370,7 @@ function place(type,rot,i,j){
 function setOcc(p, val){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++)for(let dk=0;dk<p.h;dk++){ if(val===null) delete occ[key(p.i+di,p.j+dj,p.k+dk)]; else occ[key(p.i+di,p.j+dj,p.k+dk)]=val; } }
 function meshPos(p){ return new THREE.Vector3(OX+(p.i+p.w/2)*CELLX, 0.06+(p.k+p.h/2)*CELLY, OZ+(p.j+p.d/2)*CELLZ); }
 function moveItem(p,i,j,k){ p.i=i;p.j=j;p.k=k; const pos=meshPos(p); p.mesh.position.copy(pos); if(p.mesh.userData.label){ p.mesh.userData.label.position.copy(pos); p.mesh.userData.label.position.y+=p.h*0.5+0.15; } setOcc(p,p.id); }
-function highlight(p,on){ paintCargo(p.mesh, null, on?0x224466:0x000000); }
+function highlight(p,on){ paintCargo(p.mesh, null, on?0x224466:(p.lashed?0x1a3a1a:0x000000)); }
 // 화물이 몇 면 고정됐나 (벽 또는 이웃 화물) — 2면 이상이면 안 흔들림
 function sideBlocked(p){
   let s=0;
@@ -441,8 +443,8 @@ function sailAndJudge(){
       if(t.fragile){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++) if(occ[key(p.i+di,p.j+dj,p.k+p.h)]!==undefined) hit=true; }
       // 2) 중량이 바닥이 아닌 곳(k>0)에 → 아래 화물 짓눌림
       if(t.heavy && p.k>0){ hit=true; const bId=occ[key(p.i,p.j,p.k-1)]; const below=bId!==undefined?itemById(bId):null; if(below) below.damaged=true; }
-      // 3) 고정 안 됨 → 흔들림: 위가 열려 있고 사방 지지가 부족한 화물만 (벽·이웃에 붙이면 안전)
-      if(!hit && !t.heavy){
+      // 3) 고정 안 됨 → 흔들림: 위 열림+사방 지지 부족한 화물만 (벽·이웃 붙이거나 🔒라싱하면 안전)
+      if(!hit && !t.heavy && !p.lashed){
         let topOpen = p.k+p.h<CH;
         if(topOpen){ for(let di=0;di<p.w;di++)for(let dj=0;dj<p.d;dj++) if(occ[key(p.i+di,p.j+dj,p.k+p.h)]!==undefined){ topOpen=false; break; } }
         if(topOpen && sideBlocked(p)<2 && Math.random()<0.55) hit=true;
@@ -460,21 +462,33 @@ function showResult(cbmUsed){
   const loaded=placed.length, total=INV.length;
   const rate=cbmUsed/(CW*CD*CH);
   const mB=document.getElementById('modalBody');
-  if(curStage){   // 📅 스테이지 판정 — 전량 적재 + 손상 제한
+  if(curStage){   // 📅 스테이지 판정 — 전량 적재 + 손상 제한, 그리고 손익 정산
     const g=curStage.goal;
     const allLoaded = placed.length===INV.length;
     const pass = allLoaded && dmgList.length<=g.maxDmg;
+    // 💰 부대비용
+    const thc=CONTAINERS[curCon].thc, doc=10;
+    const dgN=placed.filter(p=>TYPES[p.type].hazmat).length, dg=dgN*8;
+    const woodN=placed.filter(p=>p.type==='crate'||p.type==='pallet').length, fum=woodN>0?15:0;
+    const reefer=CONTAINERS[curCon].reefer?40:0;
+    const lashN=placed.filter(p=>p.lashed).length, lash=lashN*12;
+    const dead=Math.round((1-rate)*curStage.fee*0.22);
+    const cost=thc+doc+dg+fum+reefer+lash+dead;
+    const net=curStage.fee-cost;
     let earned=0;
-    if(pass && curStageIdx===progress.cleared){ progress.cleared++; progress.cash+=curStage.fee; earned=curStage.fee;
+    if(pass && curStageIdx===progress.cleared){ progress.cleared++; progress.cash+=net; earned=net;
       try{ localStorage.setItem('cargo_progress',JSON.stringify(progress)); }catch(e){} }
     const last = curStageIdx+1>=STAGES.length;
+    const costLine = `THC ${thc} · 서류 ${doc}`+(dg?` · ☣️위험물 ${dg}`:'')+(fum?` · 🪵훈증 ${fum}`:'')+(reefer?` · ❄️전기 ${reefer}`:'')+(lash?` · 🔒라싱 ${lash}`:'')+(dead?` · 📉데드 ${dead}`:'');
     mB.innerHTML=
       `<h2>${pass?'✅ 선적 완료!':'❌ 목표 미달'}</h2>`+
-      `적재 <b>${placed.length}/${INV.length}개</b> · 손상 <b>${dmgList.length}개</b> (허용 ${g.maxDmg}) · 🏗 핸들링 ${handCost}<br><br>`+
+      `적재 <b>${placed.length}/${INV.length}개</b> · 손상 <b>${dmgList.length}개</b> (허용 ${g.maxDmg})<br><br>`+
       (pass
-        ? `💰 수수료 <b style="color:#c05a46">+${curStage.fee}만원</b>${earned?' 획득!':''}<br>누적 수익 <b>${progress.cash}만원</b><br><br>`+
+        ? `<div style="font-size:13px;color:#666;text-align:left;line-height:1.7">💵 운임 +${curStage.fee}<br>➖ ${costLine}</div>`+
+          `<div style="font-size:22px;margin-top:6px">순이익 <b style="color:${net>=0?'#c05a46':'#b04040'}">${net>=0?'+':''}${net}만원</b></div>`+
+          `누적 수익 <b>${progress.cash}만원</b><br><br>`+
           (last?`<div style="font-size:17px;color:#c05a46">🏆 모든 선적 완수 — 포워더 성공!</div><br>`:`<button onclick="startStage(${curStageIdx+1})">▶ 다음 스테이지</button>`)
-        : `<div style="color:#b04040;font-size:13.5px">${!allLoaded?`화물을 다 싣지 못했어요 (${placed.length}/${INV.length}) — 회전·재배치로 빈틈을 메우세요`:`손상이 많아요 (${dmgList.length} > ${g.maxDmg}) — 유리는 맨 위, 중량은 바닥, 벽·이웃에 붙여 흔들림 방지`}</div><br>`+
+        : `<div style="color:#b04040;font-size:13.5px">${!allLoaded?`화물을 다 싣지 못했어요 (${placed.length}/${INV.length}) — 회전·재배치로 빈틈을 메우세요`:`손상이 많아요 (${dmgList.length} > ${g.maxDmg}) — 유리는 맨 위, 중량은 바닥, 벽·이웃에 붙이거나 🔒라싱`}</div><br>`+
           `<button onclick="retryStage()">🔄 다시 작업</button>`)+
       `<button onclick="backToStages()" style="background:#5a6270">🗂 스케줄로</button>`;
     document.getElementById('modal').style.display='flex';
@@ -588,7 +602,8 @@ function updateHUD(){
   const cbm=placed.reduce((a,p)=>a+p.w*p.d*p.h,0);
   const remain=INV.filter(x=>!x.placed).length;
   const stageTag = curStage? `📋 St${curStageIdx+1} · 🎯전량${curStage.goal.maxDmg===0?'·무손상':''}` : '';
-  document.getElementById('score').innerHTML=`${CONTAINERS[curCon].icon} <b>${CONTAINERS[curCon].name}</b> ${stageTag} · 적재 <b>${placed.length}/${INV.length}</b> · <b>${cbmOf(cbm)} CBM</b> (${Math.round(cbm/(CW*CD*CH)*100)}%) · 🏗 <b>${handCost}</b><br>남은 화물: ${remain}개 · 다 실으면 ⚓ 출항`;
+  const lashN=placed.filter(p=>p.lashed).length;
+  document.getElementById('score').innerHTML=`${CONTAINERS[curCon].icon} <b>${CONTAINERS[curCon].name}</b> ${stageTag} · 적재 <b>${placed.length}/${INV.length}</b> · <b>${cbmOf(cbm)} CBM</b> (${Math.round(cbm/(CW*CD*CH)*100)}%)${lashN?` · 🔒${lashN}`:''}<br>남은 화물: ${remain}개 · 다 실으면 ⚓ 출항`;
   // 화물 목록 — 클릭해서 선택, 배치된 건 흐리게
   document.getElementById('next').innerHTML=INV.map((item,idx)=>{
     const T=TYPES[item.type]; const cls=item.placed?'done':idx===curSel?'cur':'';
@@ -633,6 +648,15 @@ window.inspectSel=()=>{
   if(selectedP) type=selectedP.type;
   else if(curSel>=0 && INV[curSel] && !INV[curSel].placed) type=INV[curSel].type;
   if(type) openInspector(type); else flash('화물을 먼저 선택하세요 (목록 카드나 실린 화물 탭)');
+};
+// 🔒 라싱 — 선택한 화물을 고정 (흔들림 면제, 대신 라싱비). 벽·이웃에 잘 붙이면 라싱 불필요
+window.lashSel=()=>{
+  if(departed) return;
+  if(!selectedP){ flash('고정할 화물을 먼저 탭하세요'); return; }
+  selectedP.lashed=!selectedP.lashed;
+  paintCargo(selectedP.mesh, null, selectedP.lashed?0x1a3a1a:0x224466);
+  flash(selectedP.lashed?'🔒 라싱 고정 — 흔들림 방지 (라싱비 12만/개)':'라싱 해제');
+  updateHUD();
 };
 insCanvas.addEventListener('pointerdown',e=>{ idrag=true; insAuto=false; ilx=e.clientX; ily=e.clientY; e.stopPropagation(); });
 addEventListener('pointermove',e=>{ if(!idrag)return; insYaw+=(e.clientX-ilx)*0.012; insPitch+=(e.clientY-ily)*0.012; insPitch=Math.max(-1.3,Math.min(1.3,insPitch)); ilx=e.clientX; ily=e.clientY; });
