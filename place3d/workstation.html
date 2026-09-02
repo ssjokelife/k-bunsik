@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>🚢 한바다 콘솔 — CFS 업무 PC</title>
+<style>
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;overflow:hidden;font-family:'Malgun Gothic','Segoe UI',sans-serif;
+    background:linear-gradient(#1a2030 0%,#232a3c 55%,#3a3324 55%,#2a2418 100%);color:#e8ecf2;}
+  /* 상단 작업표시줄 */
+  #topbar{position:fixed;top:0;left:0;right:0;height:34px;z-index:40;display:flex;align-items:center;gap:12px;
+    padding:0 12px;background:linear-gradient(#0b1a2e,#0d2038);border-bottom:1px solid #06101f;font-size:12.5px;}
+  #topbar b{color:#7fc0ff;} .tspacer{flex:1;}
+  #topbar .chip{background:rgba(255,255,255,.06);padding:3px 9px;border-radius:7px;}
+  /* 책상 + 모니터 */
+  #desk{position:absolute;inset:34px 0 0 0;display:flex;align-items:center;justify-content:center;gap:3vw;padding:2vh 3vw 8vh;}
+  .monitor{position:relative;flex:0 0 auto;width:44vw;max-width:760px;transition:all .45s cubic-bezier(.5,.05,.2,1);}
+  .bezel{background:#0c0e12;border-radius:14px;padding:12px 12px 16px;box-shadow:0 20px 40px rgba(0,0,0,.5),inset 0 0 0 1px #23262e;}
+  .screen{position:relative;aspect-ratio:16/10;background:#fff;border-radius:5px;overflow:hidden;box-shadow:inset 0 0 0 1px #000;}
+  .screen iframe{width:100%;height:100%;border:0;display:block;}
+  .cover{position:absolute;inset:0;z-index:6;cursor:zoom-in;background:linear-gradient(rgba(80,140,220,0),rgba(20,40,80,.08));display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;}
+  .cover span{background:rgba(10,20,40,.72);color:#cfe4ff;font-size:12px;padding:4px 12px;border-radius:20px;opacity:0;transition:.2s;}
+  .monitor:hover .cover span{opacity:1;}
+  .stand{width:22%;height:5.5vh;margin:0 auto;background:linear-gradient(#1a1d24,#0c0e12);clip-path:polygon(30% 0,70% 0,100% 100%,0 100%);}
+  .foot{width:34%;height:9px;margin:-2px auto 0;background:#0c0e12;border-radius:0 0 8px 8px;}
+  .label{text-align:center;font-size:12px;color:#9fb0c8;margin-top:5px;}
+  .label b{color:#cfe0f4;}
+  /* 줌 상태 */
+  body.zoomed #desk{gap:0;}
+  body.zoomed .monitor:not(.active){opacity:0;pointer-events:none;position:absolute;transform:scale(.6);}
+  body.zoomed .monitor.active{width:min(96vw,1500px);}
+  body.zoomed .monitor.active .stand,body.zoomed .monitor.active .foot,body.zoomed .monitor.active .label{display:none;}
+  body.zoomed .monitor.active .cover{display:none;}
+  body.zoomed .monitor.active .screen{aspect-ratio:auto;height:calc(100vh - 92px);}
+  #unzoom{position:fixed;top:40px;right:14px;z-index:50;display:none;background:#0d2038;color:#cfe4ff;border:1px solid #1d3a5c;
+    border-radius:9px;padding:8px 14px;font-size:13px;font-family:inherit;cursor:pointer;}
+  body.zoomed #unzoom{display:block;}
+  button{font-family:inherit;cursor:pointer;}
+
+  /* ══ 아웃룩풍 메일 클라이언트 ══ */
+  #mail{position:absolute;inset:0;display:flex;flex-direction:column;background:#f3f2f1;color:#201f1e;font-size:13px;}
+  .ribbon{background:linear-gradient(#0f6cbd,#0a5aa0);color:#fff;padding:6px 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .ribbon .rtab{font-size:12px;opacity:.85;padding:2px 8px;border-radius:4px;}
+  .ribbon .rtab.on{background:rgba(255,255,255,.18);opacity:1;}
+  .ribbon .rbtn{background:rgba(255,255,255,.12);border:0;color:#fff;border-radius:5px;padding:5px 10px;font-size:12px;}
+  .ribbon .rspace{flex:1;}
+  .olbody{flex:1;display:flex;min-height:0;}
+  .folders{width:170px;flex:none;background:#faf9f8;border-right:1px solid #e1dfdd;padding:8px 0;overflow:auto;font-size:12.5px;}
+  .folders .fg{color:#605e5c;font-size:11px;padding:6px 12px 2px;}
+  .folders .f{padding:6px 12px;display:flex;justify-content:space-between;cursor:pointer;}
+  .folders .f.on{background:#e1efff;border-left:3px solid #0f6cbd;font-weight:bold;}
+  .folders .f .cnt{color:#0f6cbd;font-weight:bold;}
+  .mlist{width:300px;flex:none;border-right:1px solid #e1dfdd;overflow:auto;background:#fff;}
+  .mrow{padding:9px 11px;border-bottom:1px solid #f0eeec;cursor:pointer;border-left:3px solid transparent;}
+  .mrow:hover{background:#f5f9ff;}
+  .mrow.on{background:#e8f1fd;border-left-color:#0f6cbd;}
+  .mrow.unread{border-left-color:#0f6cbd;}
+  .mrow .m1{display:flex;justify-content:space-between;align-items:baseline;}
+  .mrow .snd{font-weight:600;color:#201f1e;}
+  .mrow.unread .snd{color:#0a5aa0;}
+  .mrow .tm{font-size:11px;color:#888;flex:none;margin-left:6px;}
+  .mrow .subj{font-size:12.5px;margin:2px 0;color:#1b1a19;}
+  .mrow.unread .subj{font-weight:bold;}
+  .mrow .prev{font-size:11.5px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .mrow .tags{margin-top:3px;}
+  .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;margin-right:3px;}
+  .tag.dg{background:#fde7e9;color:#a4262c;} .tag.rf{background:#e5f2fb;color:#0f6cbd;}
+  .tag.fr{background:#fff4ce;color:#8a6d00;} .tag.hv{background:#eee;color:#555;} .tag.dl{background:#fce4ec;color:#b03060;}
+  .reading{flex:1;overflow:auto;background:#fff;padding:0;min-width:0;}
+  .rdhead{padding:14px 18px;border-bottom:1px solid #edebe9;}
+  .rdhead h2{margin:0 0 8px;font-size:17px;}
+  .rdfrom{display:flex;align-items:center;gap:10px;}
+  .avatar{width:38px;height:38px;border-radius:50%;background:#0f6cbd;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:bold;flex:none;}
+  .rdfrom .fi{font-size:13px;} .rdfrom .fi .addr{color:#888;font-size:11.5px;}
+  .rdfrom .rtime{margin-left:auto;color:#888;font-size:12px;}
+  .rdbody{padding:16px 20px;line-height:1.8;font-size:13.5px;color:#252423;}
+  .rdbody .att{margin-top:14px;padding-top:10px;border-top:1px solid #edebe9;}
+  .att .file{display:inline-flex;align-items:center;gap:6px;background:#f3f2f1;border:1px solid #e1dfdd;border-radius:6px;padding:6px 10px;margin:3px 6px 3px 0;font-size:12px;}
+  .workbtn{margin-top:16px;background:#0f6cbd;color:#fff;border:0;border-radius:7px;padding:11px 18px;font-size:14px;font-weight:bold;}
+  .workbtn.locked{background:#c8c6c4;color:#fff;cursor:not-allowed;}
+  .rdempty{display:flex;height:100%;align-items:center;justify-content:center;color:#a19f9d;font-size:14px;}
+  @media(max-width:1100px){ .folders{width:120px;} .mlist{width:230px;} }
+</style>
+</head>
+<body>
+<div id="topbar">
+  <b>🚢 한바다 콘솔</b><span style="color:#8fa8c8">CFS 업무 PC</span>
+  <span class="tspacer"></span>
+  <span class="chip" id="tbUser">👤 김신입 · 신입</span>
+  <span class="chip" id="tbSave">💰 저축 0만</span>
+  <span class="chip" id="tbClock">--:--</span>
+</div>
+
+<div id="desk">
+  <div class="monitor" id="mon1" data-mon="mon1">
+    <div class="bezel"><div class="screen">
+      <!-- 업무 시스템: 아웃룩풍 메일 -->
+      <div id="mail">
+        <div class="ribbon">
+          <span style="font-weight:bold">📧 Outlook</span>
+          <span class="rtab on">홈</span><span class="rtab">보내기/받기</span><span class="rtab">폴더</span><span class="rtab">보기</span>
+          <span class="rspace"></span>
+          <button class="rbtn" onclick="alert('데모: 답장 기능은 추후')">↩ 답장</button>
+          <button class="rbtn" onclick="alert('데모: 전달')">➡ 전달</button>
+          <button class="rbtn" onclick="delMail()">🗑 삭제</button>
+        </div>
+        <div class="olbody">
+          <div class="folders">
+            <div class="fg">폴더</div>
+            <div class="f on" data-f="inbox">📥 받은편지함 <span class="cnt" id="cntInbox"></span></div>
+            <div class="f" data-f="sent">📤 보낸편지함</div>
+            <div class="f" data-f="cargo">📦 화주</div>
+            <div class="f" data-f="carrier">🚢 선사</div>
+            <div class="f" data-f="customs">🏛 세관</div>
+            <div class="f" data-f="trash">🗑 휴지통</div>
+          </div>
+          <div class="mlist" id="mlist"></div>
+          <div class="reading" id="reading"><div class="rdempty">메일을 선택하세요</div></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="cover"><span>🔍 클릭하면 크게 봅니다</span></div>
+    <div class="stand"></div><div class="foot"></div>
+    <div class="label">모니터 1 · <b>업무 시스템</b> (메일·부킹)</div>
+  </div>
+
+  <div class="monitor" id="mon2" data-mon="mon2">
+    <div class="bezel"><div class="screen">
+      <iframe id="game" src="cargo.html" title="적재 작업"></iframe>
+    </div></div>
+    <div class="cover"><span>🔍 클릭하면 크게 봅니다</span></div>
+    <div class="stand"></div><div class="foot"></div>
+    <div class="label">모니터 2 · <b>적재 작업</b> (CFS 3D)</div>
+  </div>
+</div>
+
+<button id="unzoom" onclick="unzoom()">⊟ 두 화면 보기</button>
+
+<script>
+const RANKS=['신입','대리','과장','팀장','부사장'];
+function prog(){ try{return JSON.parse(localStorage.getItem('cargo_progress')||'{}');}catch(e){return {};} }
+
+// ── 메일 데이터 (화주·선사·상사·세관) ──
+const EMAILS=[
+  {id:1,folder:'inbox',from:'박현우 팀장',addr:'hw.park@hanbada.co.kr',subj:'[지시] 이번 주 콘솔 스케줄 · 실적 관리',tm:'월 08:12',unread:true,
+   body:`김 사원, 이번 주 부산발 콘솔 6건 스케줄 잡혔다. 오른쪽 모니터(적재 작업)에서 순서대로 처리해.<br><br>
+   <b>핵심은 채움율과 무클레임이다.</b> 박스값은 고정이니 R.T를 많이 실을수록 마진이 남는다. 위험물·냉장·파손은 절대 사고 나면 안 된다. 화주 메일 잘 읽고 판단해라.<br><br>— 박현우`},
+  {id:2,folder:'inbox',from:'한빛무역 김영수',addr:'ys.kim@hanbit.com',subj:'[부킹요청] 부산→상하이 LCL (9월 3주 수 출항)',tm:'월 09:40',unread:true,stage:0,tags:['fr','dl'],
+   body:`안녕하세요, 한빛무역입니다. 상하이행 LCL 부킹 요청드립니다.<br><br>
+   • 카톤 4파렛트, 판유리 2건(<b>⚠️ A-frame, 상단 적재 금지</b>)<br>
+   • 함께 묶이는 화주: 대성물산(팔레트·목상자), 삼진화학(<b>위험물 드럼</b>), 동방식품(톤백), 캐논코리아(IBC), 부산잡화, 신라교역<br>
+   • <b>출항 마감: 9월 3주차 수요일</b> — 무손상 필수입니다.<br><br>
+   ※ 여러 화주 물량이라 다 못 실을 수 있습니다. 고R.T 위주로 골라 담아주세요. 감사합니다.`,
+   att:['상하이_콘솔_명세서.xlsx']},
+  {id:3,folder:'inbox',from:'삼진화학 안전팀',addr:'safety@samjin-chem.co.kr',subj:'[위험물] UN1263 드럼 3본 · MSDS 및 격리 요망',tm:'월 10:05',unread:true,tags:['dg'],
+   body:`상하이 건에 포함되는 위험물 신고 자료입니다.<br><br>
+   • 품명: 페인트 관련물 <b>UN1263, Class 3</b> · 200L 드럼 3본<br>
+   • <b>IMDG 격리 규정</b>: 식품류와 인접 적재 금지, 드럼 위 적재 금지(환기·접근 확보), 바닥 단 적재.<br>
+   • MSDS 및 위험물 신고서 첨부합니다. 세관 신고 잊지 마세요.<br><br>격리 위반 시 검수 반려·벌금이 부과됩니다.`,
+   att:['MSDS_UN1263.pdf','위험물신고서.pdf']},
+  {id:4,folder:'inbox',from:'대양상사 무역부',addr:'trade@daeyang.com',subj:'[부킹요청] 부산→싱가포르 40ft 콘솔 (9월 3주 토)',tm:'화 09:15',unread:true,stage:1,tags:['dg','hv'],
+   body:`싱가포르행 40ft 대형 콘솔 건입니다. 기계장비·IBC 중량물이 많습니다.<br><br>
+   • 참여 화주 8곳(대양상사·글로벌팩·한성강업·삼진화학·동방식품·유리코·부산잡화·신라교역)<br>
+   • <b>🔩 중량 배분 주의</b> — 무거운 화물 좌우·앞뒤 고르게(전복 방지). 손상 1개까지는 허용.<br>
+   • 위험물 드럼 포함, 판유리 포함. 꽉 채울수록 R.T 매출이 큽니다.`,
+   att:['싱가포르_패킹리스트.xlsx']},
+  {id:5,folder:'inbox',from:'신선물류 콜드체인',addr:'cold@ssmulyu.co.kr',subj:'[냉장/냉동] 부산→도쿄 리퍼 — 온도 엄수!',tm:'화 11:30',unread:true,stage:2,tags:['rf','dl'],
+   body:`도쿄행 리퍼(냉동 컨테이너) 건입니다. <b style="color:#a4262c">온도 관리가 생명입니다.</b><br><br>
+   • 리퍼는 <b>설정온도가 하나뿐</b>입니다. 냉동(-18℃)과 냉장(+4℃)을 <b>한 박스에 섞지 마세요</b> — 섞으면 청과가 얼어(동해) 전량 클레임입니다.<br>
+   • 우리(신선물류)는 <b>냉장 청과(+4℃)</b>입니다. 오션델리·대양수산·한류수산은 냉동(-18℃)입니다.<br>
+   • <b>한 온도 클래스만</b> 골라 실어주세요. 무손상 필수.`,
+   att:['콜드체인_온도기준.pdf']},
+  {id:6,folder:'inbox',from:'고려해운 스페이스팀',addr:'space@krline.com',subj:'[선사공지] 상하이 스페이스 확정 · THC 인상 안내',tm:'화 14:02',unread:false,tags:[],
+   body:`부산→상하이 9월 3주차 20GP 스페이스 확정되었습니다.<br><br>
+   • 성수기 THC(터미널 조작료) 소폭 인상 예정입니다. 부대비 정산에 반영됩니다.<br>
+   • 데드프레이트(미선적 공간)는 콘솔사 부담이니 채움율 관리 부탁드립니다.<br><br>— 고려해운`},
+  {id:7,folder:'inbox',from:'글로벌테크 물류',addr:'logi@globaltech.com',subj:'[부킹요청] 부산→로스앤젤레스 40HC (태평양 횡단)',tm:'수 09:50',unread:true,stage:3,tags:['hv','dg'],
+   body:`LA행 40HC 대량 콘솔입니다. <b>원양(태평양)이라 롤링이 강합니다</b> — 라싱·적재 안정 각별히.<br><br>
+   • 기계장비 2대 등 초중량 다수. 중량 초과 주의(payload 26t).<br>
+   • 원양은 R.T 단가가 높아($135/R.T) 잘 채우면 마진이 큽니다. 손상 1개 이내.`,
+   att:['LA_적하목록.xlsx']},
+  {id:8,folder:'inbox',from:'부산세관 수출과',addr:'export@customs.go.kr',subj:'[안내] 수출 위험물 컨테이너 적재신고 의무',tm:'수 13:20',unread:false,tags:['dg'],
+   body:`위험물(DG) 포함 컨테이너는 출항 전 <b>적재신고 및 격리기준 준수</b>가 의무입니다.<br>
+   • DG 서차지(신고비)가 부과됩니다.<br>• 격리 위반 적발 시 반출 보류·과태료 대상입니다.<br><br>— 부산세관`},
+  {id:9,folder:'inbox',from:'정밀산업 수출팀',addr:'export@jsindustry.co.kr',subj:'[부킹요청] 부산→두바이 · 판유리·중량물 다수 (까다로움)',tm:'목 10:10',unread:true,stage:4,tags:['fr','hv','dg'],
+   body:`두바이행 건입니다. <b>판유리 3건 + 기계·강관 중량물</b>이라 배치 난이도가 높습니다.<br><br>
+   • 판유리는 반드시 <b>맨 위</b>, 중량물은 <b>바닥</b>. 무손상 목표(마진 25만+).<br>
+   • 위험물 드럼도 포함되니 격리 유의. 실력 보여주세요.`,
+   att:['두바이_명세.xlsx']},
+  {id:10,folder:'inbox',from:'한바다해운 콘솔데스크',addr:'consol@hanbada.co.kr',subj:'[부킹요청] 부산→로테르담 (유럽 원거리 · 최종 건)',tm:'목 15:40',unread:true,stage:5,tags:['hv','fr','dg'],
+   body:`이번 주 마지막, 유럽 로테르담 최종 콘솔입니다. <b>최장거리·최고 R.T 단가($160)</b>.<br><br>
+   • 대형 혼합 화물(기계·IBC·강관·판유리·위험물·톤백·카톤). 손상 1개 이내.<br>
+   • 원양 롤링 강함 — 라싱·균형 필수. 최적 화주 조합으로 마진 200만+ 목표.<br><br>수고 많았습니다. 유종의 미를!`,
+   att:['로테르담_최종명세.xlsx']},
+  {id:11,folder:'inbox',from:'박현우 팀장',addr:'hw.park@hanbada.co.kr',subj:'[주의] 클레임은 곧 신뢰 하락이다',tm:'금 08:30',unread:false,tags:[],
+   body:`파손·동해 클레임이 나면 화주가 떠난다. 무손상 기록이 다음 부킹을 부른다.<br>
+   급하다고 아무거나 받지 말고, <b>고R.T·저리스크</b> 위주로 골라라. 과욕(과수락)은 롤오버 비용만 낸다.<br><br>— 박현우`},
+];
+
+let curFolder='inbox', curMail=null, trashed=new Set();
+const FOLDER_OF=m=> m.from.includes('세관')?'customs': m.from.includes('해운')||m.from.includes('선사')||m.addr.includes('krline')?'carrier': (m.stage!=null||m.from.includes('무역')||m.from.includes('물류')||m.from.includes('화학')||m.from.includes('산업'))?'cargo':'inbox';
+
+function inFolder(m){ if(trashed.has(m.id)) return curFolder==='trash'; if(curFolder==='trash') return false;
+  if(curFolder==='inbox') return true; if(curFolder==='sent') return false; return FOLDER_OF(m)===curFolder; }
+
+function renderList(){
+  const cleared=(prog().cleared)??0;
+  const list=EMAILS.filter(inFolder);
+  document.getElementById('mlist').innerHTML=list.map(m=>{
+    const tags=(m.tags||[]).map(t=>`<span class="tag ${t}">${({dg:'☣️위험물',rf:'❄️냉장',fr:'⚠️파손',hv:'🔩중량',dl:'⏰마감'})[t]}</span>`).join('');
+    const prev=m.body.replace(/<[^>]+>/g,' ').slice(0,42);
+    return `<div class="mrow ${m.unread?'unread':''} ${curMail===m.id?'on':''}" onclick="openMail(${m.id})">
+      <div class="m1"><span class="snd">${m.unread?'● ':''}${m.from}</span><span class="tm">${m.tm}</span></div>
+      <div class="subj">${m.subj}</div><div class="prev">${prev}…</div>
+      ${tags?`<div class="tags">${tags}</div>`:''}</div>`;
+  }).join('')||'<div style="padding:20px;color:#a19f9d;text-align:center">메일 없음</div>';
+  document.getElementById('cntInbox').textContent=EMAILS.filter(m=>!trashed.has(m.id)&&m.unread).length||'';
+}
+function openMail(id){
+  const m=EMAILS.find(x=>x.id===id); if(!m) return; m.unread=false; curMail=id;
+  const cleared=(prog().cleared)??0;
+  const initial=m.from.replace(/[^가-힣A-Za-z]/g,'').slice(0,1)||'✉';
+  const att=(m.att||[]).map(f=>`<span class="file">📎 ${f}</span>`).join('');
+  let work='';
+  if(m.stage!=null){
+    const locked=m.stage>cleared;
+    work=locked
+      ? `<button class="workbtn locked" title="이전 건 먼저 처리">🔒 이전 건 먼저 처리하세요 (Stage ${m.stage+1})</button>`
+      : `<button class="workbtn" onclick="startWork(${m.stage})">🖥️ 이 건 작업 시작 → 오른쪽 모니터 (Stage ${m.stage+1})</button>`;
+  }
+  document.getElementById('reading').innerHTML=
+    `<div class="rdhead"><h2>${m.subj}</h2>
+      <div class="rdfrom"><div class="avatar">${initial}</div>
+        <div class="fi"><b>${m.from}</b><br><span class="addr">${m.addr}</span></div>
+        <span class="rtime">${m.tm}</span></div></div>
+     <div class="rdbody">${m.body}
+        ${att?`<div class="att"><div style="font-size:12px;color:#888;margin-bottom:4px">첨부파일</div>${att}</div>`:''}
+        ${work}</div>`;
+  renderList();
+}
+function delMail(){ if(curMail==null) return; trashed.add(curMail); curMail=null;
+  document.getElementById('reading').innerHTML='<div class="rdempty">메일을 선택하세요</div>'; renderList(); }
+
+document.querySelectorAll('.folders .f').forEach(f=>f.addEventListener('click',e=>{
+  e.stopPropagation(); document.querySelectorAll('.folders .f').forEach(x=>x.classList.remove('on'));
+  f.classList.add('on'); curFolder=f.dataset.f; renderList();
+}));
+
+// ── 오른쪽 모니터로 작업 시작 ──
+function startWork(idx){
+  const g=document.getElementById('game').contentWindow;
+  try{ if(g&&g.startStage){ g.startStage(idx); } }catch(e){}
+  zoom('mon2');
+}
+
+// ── 모니터 줌 ──
+function zoom(id){
+  document.querySelectorAll('.monitor').forEach(m=>m.classList.toggle('active',m.id===id));
+  document.body.classList.add('zoomed');
+  window.dispatchEvent(new Event('resize'));
+  setTimeout(()=>{ try{document.getElementById('game').contentWindow.dispatchEvent(new Event('resize'));}catch(e){} },480);
+}
+function unzoom(){ document.body.classList.remove('zoomed');
+  document.querySelectorAll('.monitor').forEach(m=>m.classList.remove('active'));
+  setTimeout(()=>{ try{document.getElementById('game').contentWindow.dispatchEvent(new Event('resize'));}catch(e){} },480);
+}
+document.querySelectorAll('.cover').forEach(c=>c.addEventListener('click',e=>{
+  zoom(c.closest('.monitor').id);
+}));
+
+// ── 상단바(진행상태 반영) + 시계 ──
+function refresh(){
+  const p=prog(); const r=RANKS[p.rankIdx||0]||'신입';
+  document.getElementById('tbUser').textContent=`👤 김신입 · ${r}`;
+  document.getElementById('tbSave').textContent=`💰 저축 ${p.savings||0}만`;
+  const d=new Date(); document.getElementById('tbClock').textContent=
+    `${['일','월','화','수','목','금','토'][d.getDay()]} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  if(curMail!=null){ const m=EMAILS.find(x=>x.id===curMail); if(m&&m.stage!=null) openMail(curMail); } // 잠금상태 갱신
+  else renderList();
+}
+setInterval(refresh,2000); window.addEventListener('focus',refresh);
+renderList(); openMail(1); refresh();
+</script>
+</body>
+</html>
