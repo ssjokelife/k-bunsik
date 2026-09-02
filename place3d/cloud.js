@@ -14,19 +14,20 @@ const Cloud = (() => {
     } catch (e) { client = false; }
     return client || null;
   }
+  const S = 'consoltrain';   // 전용 스키마 (대시보드 Exposed schemas에 추가 필요)
   return {
     enabled,
-    async saveSubmission(row) { try { const c = await conn(); if (c) await c.from('consol_submissions').insert(row); } catch (e) {} },
-    async saveAttempt(row)    { try { const c = await conn(); if (c) await c.from('consol_attempts').insert(row); } catch (e) {} },
+    async saveSubmission(row) { try { const c = await conn(); if (c) await c.schema(S).from('submissions').insert(row); } catch (e) {} },
+    async saveAttempt(row)    { try { const c = await conn(); if (c) await c.schema(S).from('attempts').insert(row); } catch (e) {} },
     async leaderboard(caseIdx) {
       try { const c = await conn(); if (!c) return null;
-        const { data } = await c.from('consol_leaderboard').select('*').eq('case_idx', caseIdx).order('best_margin', { ascending: false }).limit(10);
+        const { data } = await c.schema(S).from('leaderboard').select('*').eq('case_idx', caseIdx).order('best_margin', { ascending: false }).limit(10);
         return data || null;
       } catch (e) { return null; }
     },
     async caseStats() {
       try { const c = await conn(); if (!c) return null;
-        const { data } = await c.from('consol_case_stats').select('*');
+        const { data } = await c.schema(S).from('case_stats').select('*');
         return data || null;
       } catch (e) { return null; }
     },
