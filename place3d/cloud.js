@@ -31,6 +31,13 @@ const Cloud = (() => {
         return data || null;
       } catch (e) { return null; }
     },
+    async saveAiRuns(rows) { try { const c = await conn(); if (c && rows && rows.length) await c.schema(S).from('ai_runs').insert(rows); } catch (e) {} },
+    async aiBaseline() {
+      try { const c = await conn(); if (!c) return null;
+        const { data } = await c.schema(S).from('ai_baseline').select('*');
+        return data || null;
+      } catch (e) { return null; }
+    },
   };
 })();
 window.Cloud = Cloud;

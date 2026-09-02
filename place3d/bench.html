@@ -36,6 +36,8 @@
     <div class="muted" id="cfg">전략 4종 × 스테이지 6 · 각 <b id="N">25</b>회 몬테카를로 (항해 손상은 확률적)</div>
     <div class="prog" id="prog" style="display:none"><div id="progbar"></div></div>
     <div class="muted" id="status"></div>
+    <button class="btn alt" id="saveAi" onclick="saveAi()" style="display:none;margin-top:8px">☁ AI 결과 클라우드 저장 (기준선 공유)</button>
+    <span class="muted" id="saveStatus"></span>
   </div>
 
   <div id="report"></div>
@@ -43,8 +45,10 @@
 
 <iframe id="game" src="cargo.html?sim=1" title="sim engine"></iframe>
 
+<script src="cloud.js"></script>
 <script>
 const SALARY=[220,300,420,600,900], LIVING=150, RANKS=['신입','대리','과장','팀장','부사장'];
+let lastAgg=null, lastScn=null;
 const N=25;
 function game(){ return document.getElementById('game').contentWindow; }
 function ready(){ try{return !!game().wsSimulate;}catch(e){return false;} }
@@ -98,7 +102,8 @@ async function run(scn){
     }
   }
   prog.style.display='none'; document.getElementById('status').textContent=`완료 · 총 ${total*6} 스테이지 시뮬`;
-  render(scn,agg); running=false;
+  render(scn,agg); running=false; lastAgg=agg; lastScn=scn;
+  if(window.Cloud&&Cloud.enabled()) document.getElementById('saveAi').style.display='inline-block';
   document.getElementById('runBase').disabled=false; document.getElementById('runHarsh').disabled=false;
 }
 const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
@@ -145,6 +150,19 @@ function render(scn,agg){
   html+=ins;
   document.getElementById('report').innerHTML=html;
 }
+// ☁ AI 수행 결과를 클라우드에 저장 (전략×케이스 성과 = 교육생이 이겨야 할 기준선)
+window.saveAi=async ()=>{
+  if(!lastAgg||!window.Cloud||!Cloud.enabled()) return;
+  const rows=[]; ORDER.forEach(key=>{ const A=lastAgg[key], s=STRATS[key];
+    for(let i=0;i<6;i++){ if(!A.stageAtt[i]) continue;
+      rows.push({strategy:s.name, case_idx:i, scenario:lastScn,
+        avg_margin:Math.round(avg(A.stageMargin[i])*10)/10,
+        avg_stars:Math.round(A.stageStars[i]/A.stageAtt[i]*10)/10,
+        pass_rate:Math.round(A.stagePass[i]/A.stageAtt[i]*100), n:A.stageAtt[i]}); } });
+  document.getElementById('saveStatus').textContent=` … ${rows.length}건 전송 중`;
+  await Cloud.saveAiRuns(rows);
+  document.getElementById('saveStatus').textContent=` → ${rows.length}건 저장 완료 ☁ (아카데미/교육콘솔에 AI 기준선 표시)`;
+};
 document.getElementById('N').textContent=N;
 // 엔진 준비되면 자동 1회
 (async()=>{ for(let i=0;i<80&&!ready();i++) await sleep(150); if(ready()) run('base'); })();

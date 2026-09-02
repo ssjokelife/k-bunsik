@@ -68,8 +68,37 @@ select case_id,
 from consoltrain.attempts
 group by case_id;
 
+-- 3) AI 벤치마크 수행 결과 (bench.html) — 전략별·케이스별 성과(기준선/분석용)
+create table if not exists consoltrain.ai_runs (
+  id         bigint generated always as identity primary key,
+  strategy   text not null check (char_length(strategy) <= 20),
+  case_idx   int  not null check (case_idx between 0 and 20),
+  scenario   text not null default 'base' check (char_length(scenario) <= 20),
+  avg_margin real not null,
+  avg_stars  real not null,
+  pass_rate  int  not null check (pass_rate between 0 and 100),
+  n          int  not null,
+  created_at timestamptz not null default now()
+);
+alter table consoltrain.ai_runs enable row level security;
+drop policy if exists "insert ai" on consoltrain.ai_runs;
+drop policy if exists "select ai" on consoltrain.ai_runs;
+create policy "insert ai" on consoltrain.ai_runs for insert to anon, authenticated with check (true);
+create policy "select ai" on consoltrain.ai_runs for select to anon, authenticated using (true);
+
+-- 케이스별 AI 최고 기준선(이겨야 할 선) — base 시나리오에서 최고 마진 전략
+create or replace view consoltrain.ai_baseline
+  with (security_invoker = true) as
+select distinct on (case_idx)
+       case_idx, strategy, avg_margin, avg_stars, pass_rate
+from consoltrain.ai_runs
+where scenario = 'base'
+order by case_idx, avg_margin desc;
+
 -- Data API 노출용 GRANT
 grant select, insert on consoltrain.submissions to anon, authenticated;
 grant select, insert on consoltrain.attempts    to anon, authenticated;
+grant select, insert on consoltrain.ai_runs      to anon, authenticated;
 grant select        on consoltrain.leaderboard  to anon, authenticated;
 grant select        on consoltrain.case_stats   to anon, authenticated;
+grant select        on consoltrain.ai_baseline  to anon, authenticated;

@@ -52,7 +52,9 @@
   </div>
 </div>
 
+<script src="cloud.js"></script>
 <script>
+let aiBase={};   // case_idx → {avg_margin, strategy} (클라우드 AI 기준선)
 // 교육 과정(커리큘럼) — 직급별로 체험 과제(play=train.html?case=N)와 판단 케이스(quiz=casestudy id)
 const TRACKS=[
   { rank:'신입', color:'#7fd18a', role:'적입 기본 — 무손상·안전 적재', items:[
@@ -89,8 +91,12 @@ function href(it){ return it.t==='play'?`train.html?case=${it.ref}`:`casestudy.h
 function renderTracks(){
   document.getElementById('tracks').innerHTML=TRACKS.map(tr=>{
     const items=tr.items.map(it=>{ const st=itemStatus(it);
+      let ai='';
+      if(it.t==='play' && aiBase[it.ref]){ const ab=aiBase[it.ref], best=playBest(it.ref);
+        const beat=best&&best.margin>=Math.round(ab.avg_margin);
+        ai=`<div class="k" style="color:#e0a060">🤖 AI(${ab.strategy}) 기준 ${Math.round(ab.avg_margin)}만${best?(beat?' · 넘음 ✅':' · 도전 ⬆'):''}</div>`; }
       return `<a class="item" href="${href(it)}"><div class="ic">${it.t==='play'?'🎮':'📚'}</div>
-        <div class="tt">${it.title}<br><span class="k">${it.t==='play'?'체험 과제':'판단 케이스'} · ${it.key}</span></div>
+        <div class="tt">${it.title}<br><span class="k">${it.t==='play'?'체험 과제':'판단 케이스'} · ${it.key}</span>${ai}</div>
         <div class="st"><span class="${st.s}">${st.txt}</span></div></a>`; }).join('');
     const done=tr.items.filter(it=>itemStatus(it).s==='ok').length, pct=Math.round(done/tr.items.length*100);
     return `<div class="card track" style="--c:${tr.color}">
@@ -130,6 +136,8 @@ window.saveCloud=()=>{ const url=document.getElementById('sbUrl').value.trim(), 
 window.clearCloud=()=>{ localStorage.removeItem('sb_config'); document.getElementById('sbUrl').value=''; document.getElementById('sbKey').value=''; loadCloud(); };
 
 renderKPIs(); renderTracks(); renderCats(); loadCloud();
+// 클라우드 연결 시 AI 기준선 로드 → 트랙에 "나 vs AI" 표시
+if(window.Cloud && Cloud.enabled()){ Cloud.aiBaseline().then(d=>{ if(d&&d.length){ d.forEach(r=>aiBase[r.case_idx]=r); renderTracks(); } }); }
 </script>
 </body>
 </html>
