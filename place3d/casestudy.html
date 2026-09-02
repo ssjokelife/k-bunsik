@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>📚 콘솔사 사례 학습 — 실제 사고로 배우는 물류</title>
+<style>
+  *{box-sizing:border-box;} body{margin:0;background:#0f141c;color:#e6ecf3;font-family:'Malgun Gothic','Segoe UI',sans-serif;line-height:1.6;}
+  .wrap{max-width:900px;margin:0 auto;padding:20px 16px 60px;}
+  h1{font-size:22px;margin:0 0 4px;} .sub{color:#8fa3bd;font-size:13px;margin-bottom:14px;}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+  .chip{background:#1a2433;border:1px solid #26303f;border-radius:14px;padding:4px 11px;font-size:12px;cursor:pointer;}
+  .chip.on{background:#12385f;border-color:#2f9be0;color:#cfe4ff;}
+  .card{background:#161d29;border:1px solid #263243;border-radius:12px;padding:0;margin:12px 0;overflow:hidden;}
+  .chead{padding:13px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;}
+  .chead:hover{background:#1a2334;} .cico{font-size:22px;} .ctitle{flex:1;} .ctitle b{font-size:15px;} .ctag{font-size:11px;color:#8fa3bd;}
+  .cstate{font-size:12px;} .cstate .ok{color:#6bd08a;} .cstate .no{color:#e0705a;}
+  .cbody{display:none;padding:0 16px 16px;border-top:1px solid #223;} .card.open .cbody{display:block;}
+  .scn{background:#0d1622;border-left:3px solid #3a5a7a;border-radius:6px;padding:11px 14px;margin:12px 0;font-size:13.5px;}
+  .q{font-weight:bold;margin:10px 0 6px;}
+  .opt{display:block;width:100%;text-align:left;background:#1a2333;border:1px solid #2a3547;color:#e6ecf3;border-radius:8px;padding:10px 13px;margin:5px 0;font-size:13px;cursor:pointer;font-family:inherit;}
+  .opt:hover{border-color:#3a6ea5;} .opt.sel{border-color:#2f9be0;}
+  .opt.correct{background:#173a24;border-color:#4caf50;} .opt.wrong{background:#3a1c1c;border-color:#c0483a;}
+  .opt .mk{float:right;font-weight:bold;}
+  .reveal{display:none;margin-top:12px;} .card.answered .reveal{display:block;}
+  .rv{border-radius:8px;padding:11px 14px;margin:8px 0;font-size:13px;}
+  .rv.exp{background:#12324a;border-left:4px solid #2f9be0;}
+  .rv.out{background:#2a1e12;border-left:4px solid #e0894f;}
+  .rv.les{background:#16351f;border-left:4px solid #4caf50;}
+  .rv b{color:#cfe4ff;} .src{font-size:11.5px;color:#7f97b5;margin-top:6px;}
+  .src a{color:#5aa0e8;} .play{display:inline-block;margin-top:8px;background:#e8734f;color:#fff;text-decoration:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:bold;}
+  .btn{background:#2f6fd0;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:13.5px;cursor:pointer;font-family:inherit;margin-top:8px;}
+  .score{background:#12233a;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:10px;}
+  .pending{color:#e0b070;font-size:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📚 사례 학습 — 실제 사고로 배우는 물류</h1>
+  <div class="sub">국제 해상운송·포워딩·LCL 혼재의 <b>실제 사고와 규정</b>을 케이스로. 상황을 읽고 <b>당신의 결정</b>을 고르면,
+    실제 결말·교훈·출처를 보여줍니다. · 방과후 스튜디오 사원 교육</div>
+  <div class="score" id="score"></div>
+  <div class="bar" id="cats"></div>
+  <div id="list"></div>
+</div>
+
+<script>
+// 실제 사례 케이스팩 (출처 포함). 리서치 검증분으로 확장 예정.
+const CASES=[
+  { id:'yantian', cat:'위험물(DG)', icon:'🔥', title:'"코코넛 펠릿"의 정체 — 오신고 자기발열 화물', mech:'위험물격리', play:{case:4,label:'위험물 격리를 게임으로 (두바이)'},
+    scenario:'"코코넛 펠릿"으로 신고된 화물 부킹이 들어왔다. 그런데 실제로는 목탄(charcoal)일 가능성이 있다. 목탄류는 자연발화(자기발열) 위험이 있다.',
+    q:'담당자로서 올바른 조치는?',
+    opts:[{t:'신고서대로 일반 화물로 접수해 빨리 처리한다',c:false},
+      {t:'자기발열(IMDG Class 4.2) 시험성적서를 요구하고, 확인 전 선적 보류',c:true},
+      {t:'갑판 위에만 실으면 문제없으니 그대로 진행',c:false},
+      {t:'운임이 낮은 건이니 검증 없이 넘긴다',c:false}],
+    explain:'목탄·석탄·어분 등은 자기발열(Class 4.2) 해당 여부를 시험해야 하며, 일반 화물로 오신고되면 격리·냉소적재 등 안전조치가 누락된다. 애매한 품명은 임의 수리 금지.',
+    outcome:'실제: <b>Yantian Express 화재(2019)</b> — 코코넛 펠릿으로 오신고된 코코넛 목탄의 자연발화가 유력 원인으로 지목, 약 320개 컨테이너 전손. (독일 BSU 조사)',
+    lesson:'상습 오신고 품목(목탄·리튬배터리·인화성 액체)은 품명 검증부터. 신고 클래스만 믿지 말 것.',
+    src:[['Maritime Executive','https://maritime-executive.com/article/report-misdeclared-charcoal-likely-caused-yantian-express-fire'],['BSU 보고서 15/19','https://www.bsu-bund.de/SharedDocs/pdf/EN/Investigation_Report/2020/Investigation_Report_15_19.html']] },
+  { id:'undeclared', cat:'위험물(DG)', icon:'💥', title:'저가 품명으로 숨긴 반응성 위험물', mech:'위험물격리', play:{case:1,label:'위험물 격리를 게임으로 (싱가포르)'},
+    scenario:'"완구"처럼 저가·범용 품명으로 신고된 화물이 있다. 화주 정보와 포장이 어딘가 반응성 화학물(예: 차아염소산칼슘)을 의심케 한다.',
+    q:'한정된 검사 자원, 어떻게?',
+    opts:[{t:'모든 화물을 다 뜯어 전수검사한다(비현실적)',c:false},
+      {t:'고위험 품목/화주를 겨냥한 무작위 검사와 서류 교차검증을 한다',c:true},
+      {t:'신고서가 있으니 그대로 접수한다',c:false},
+      {t:'열원 근처에 실어 빨리 말린다',c:false}],
+    explain:'미신고 반응성·산화성 물질은 항만·선박이 존재를 몰라 격리·소방 대응이 불가능하다. 차아염소산칼슘은 반복 화재 물질. 열원 이격·저온 통풍 적재가 원칙.',
+    outcome:'실제: <b>KMTC Hong Kong(2019, 램차방)</b> 미신고 차아염소산칼슘 폭발로 (보도상) 130명 이상 병원 이송·선박 전손. <b>Hanjin Pennsylvania(2002)</b> 유사 물질 폭발 2명 사망. 위험물 신고 컨테이너의 약 6.5%가 오신고(NCB 검사).',
+    lesson:'전수검사는 불가능 — 고위험 품목·화주에 검사 자원을 집중. 신고서-실물 교차검증.',
+    src:[['Shipping&Freight Resource (KMTC)','https://www.shippingandfreightresource.com/undeclared-hazardous-goods-cause-of-kmtc-hongkong-fire/'],['FreightWaves (NCB 6.5%)','https://www.freightwaves.com/news/container-inspections-reveal-misdeclared-cargo-poor-stowage']] },
+  { id:'vgm', cat:'중량/VGM', icon:'⚖', title:'과적 컨테이너 — 왜 무게를 검증하게 됐나', mech:'중량', play:{case:3,label:'중량초과를 게임으로 (LA 40HC)'},
+    scenario:'화주가 제출한 컨테이너 총중량이 부피·품목에 비해 비현실적으로 가볍다. 선적을 서두르라는 압박이 있다.',
+    q:'규정상·실무상 옳은 것은?',
+    opts:[{t:'신고값 그대로 믿고 B/L 발행 — 빨리 선적',c:false},
+      {t:'VGM(검증총중량)을 확인·제출한다. VGM 없으면 선적 불가',c:true},
+      {t:'대충 눈대중으로 조정해 신고',c:false},
+      {t:'무게는 선사 책임이니 신경 안 씀',c:false}],
+    explain:'2016.7 SOLAS 개정으로 <b>VGM 제출이 의무(No VGM, No Load)</b>, 예외 없음, 책임은 화주. 과적은 스택 하중 계산·선체 안전 마진을 무너뜨린다.',
+    outcome:'실제: <b>MSC Napoli(2007)</b> 선체 파손·좌초 시 갑판 컨테이너 137개(약 20%)가 신고중량보다 3톤 이상 초과(최대 20톤 차, 총 312톤 초과)로 적발 — 이것이 <b>SOLAS VGM 도입의 직접 배경</b>. (영국 MAIB)',
+    lesson:'무게 신고는 "빨리"보다 "정확히". VGM은 협상 대상이 아니다.',
+    src:[['IMO VGM','https://www.imo.org/en/ourwork/safety/pages/verification-of-the-gross-mass.aspx'],['Marsden — SOLAS 배경(Napoli)','https://www.marsden-weighing.co.uk/blog/solas-container-weighing']] },
+  { id:'reefer', cat:'냉동/콜드체인', icon:'❄️', title:'리퍼 설정온도와 냉동·냉장 혼적', mech:'온도', play:{case:2,label:'온도 혼적을 게임으로 (도쿄 리퍼)'},
+    scenario:'한 리퍼 컨테이너에 냉동식품(-18℃) 화주와 신선 청과(+4℃) 화주 물량을 함께 실어달라는 요청. 공간은 남는다.',
+    q:'어떻게 처리하나?',
+    opts:[{t:'공간이 남으니 둘 다 실어 채움율을 높인다',c:false},
+      {t:'리퍼는 설정온도가 하나뿐 — 한 온도 클래스만 싣고, 다른 온도는 다음 배/다른 박스로',c:true},
+      {t:'중간 온도(-7℃)로 맞춘다',c:false},
+      {t:'냉동 우선, 청과는 문 쪽에 둔다',c:false}],
+    explain:'리퍼는 <b>박스 전체가 하나의 세트포인트</b>로 운전된다. -18℃면 청과가 얼고(동해), +4℃면 냉동이 녹는다. 선적 전 PTI(사전점검)·세트포인트 이중확인·화물 사전냉각도 필수.',
+    outcome:'콜드체인 실패(온도 일탈)는 반복되는 식품·의약품 클레임의 주요 원인. 게임에서도 혼적 시 청과 전량 동해로 −100만 이상.',
+    lesson:'냉장(+4)과 냉동(-18)은 물리적으로 공존 불가. "공간이 남는다"는 이유로 섞지 말 것.',
+    src:[['ONE 리퍼 취급 가이드','https://us.one-line.com/refrigerated-cargo/reefer-handling-guideline'],['Marlin Blue — 리퍼 클레임','https://marlinblue.com/reefer-cargo-claims/']] },
+  { id:'tempchem', cat:'냉동/콜드체인', icon:'🌡', title:'항구에 며칠 대기하는 온도민감 화학물', mech:'온도',
+    scenario:'DVB(디비닐벤젠) 같은 온도민감 화학물이 선적까지 항구에서 며칠 대기해야 한다. 여름철 뙤약볕이다.',
+    q:'올바른 조치는?',
+    opts:[{t:'상온에 두고 순번대로 선적',c:false},
+      {t:'냉각·차광을 유지하고 신속 선적, 보관 온도 이력을 확인',c:true},
+      {t:'뜨거운 갑판에 두면 빨리 마른다',c:false},
+      {t:'온도는 화주 책임이니 확인 불필요',c:false}],
+    explain:'중합성 단량체는 일정 온도(예: DVB 약 27℃) 이하 유지가 필수. 방치 시 폭주성 자가중합이 개시된다. NVOCC도 화주의 보관·온도조건을 확인할 책임이 있다.',
+    outcome:'실제: <b>MSC Flaminia 폭발(2012)</b> — DVB80 ISO탱크가 선적 전 한여름 뙤약볕에 ~10일 방치되어 자가중합, 대서양에서 폭발·화재 3명 사망. 미국 법원은 화주·탱크운영사 책임 인정.',
+    lesson:'"보관은 화주 몫"이 아니다 — 온도 이력·조건을 확인해야 폭발을 막는다.',
+    src:[['Shipping&Freight Resource','https://www.shippingandfreightresource.com/shipper-and-container-operator-liable-for-explosion-on-msc-flaminia/'],['Wikipedia — MSC Flaminia','https://en.wikipedia.org/wiki/MSC_Flaminia']] },
+  { id:'stow', cat:'적재/래싱', icon:'🌊', title:'무게중심·스택 하중과 해상 유실', mech:'적재붕괴', play:{case:3,label:'중량·편중을 게임으로 (LA 40HC)'},
+    scenario:'무거운 컨테이너/화물을 어디에 둘지 결정해야 한다. 스택 상단에 두면 작업이 편하다.',
+    q:'적재 원칙은?',
+    opts:[{t:'무거운 것을 상단에 둬 하역을 편하게 한다',c:false},
+      {t:'무거운 것은 바닥·중앙에 두고 하중을 균등 배분(편중 방지)',c:true},
+      {t:'한쪽에 몰아 실어 공간을 아낀다',c:false},
+      {t:'래싱만 하면 위치는 무관하다',c:false}],
+    explain:'무게중심이 높거나 편중되면 횡동요·파라메트릭 롤링에서 스택이 무너진다. CTU Code는 균등 하중 배분·래싱을 규정. 중량 오신고는 스택 계산 자체를 무너뜨린다.',
+    outcome:'실제: <b>ONE Apus(2020)</b> 태평양 폭풍우의 파라메트릭 롤링으로 약 1,800개 컨테이너 유실(일본 JTSB 최종보고서). 부실 수납으로 인한 산업 손실은 연 60억 달러 이상 추정(CTU Code 배경).',
+    lesson:'무거운 것은 바닥·중앙, 균등하게. 편중·상단 과중은 붕괴의 시작.',
+    src:[['JTSB 보고서 (ONE Apus)','https://jtsb.mlit.go.jp/eng-mar_report/2024/2022tk0001e.pdf'],['IMO CTU Code','https://www.imo.org/en/ourwork/safety/pages/ctu-code.aspx']] },
+  { id:'demurrage', cat:'부킹/데머리지', icon:'⏱', title:'항만 적체기의 데머리지·디텐션 폭탄', mech:'부킹',
+    scenario:'항만 적체로 컨테이너 반출입이 물리적으로 불가능한 기간인데도 데머리지/디텐션(D&D)이 부과됐다.',
+    q:'가장 적절한 대응은?',
+    opts:[{t:'분쟁 피하려 무조건 전액 납부',c:false},
+      {t:'통제 불가 사유(적체·불가항력) 증빙을 확보해 면제·감면을 청구',c:true},
+      {t:'컨테이너를 무단 반출한다',c:false},
+      {t:'청구서를 무시하고 방치한다',c:false}],
+    explain:'무료기간(free time)·D&D 조건을 부킹 단계에서 명확히 하고, 통제 불가 기간의 면제 근거를 문서화한다. OSRA(2022) 이후 선사의 청구 정당성 입증 의무가 강화됐다.',
+    outcome:'실제: 2021년 주요 선사 9곳이 D&D로 약 53억 달러 청구(전년比 평균 104%↑). 미국 FMC는 MSC에 청구·표기 위반으로 2,270만 달러 과징금 부과.',
+    lesson:'적체 기간의 부당 청구는 증빙 기반 이의제기가 정석. "무조건 납부"도 "방치"도 아니다.',
+    src:[['Supply Chain Dive (2021 D&D)','https://www.supplychaindive.com/news/demurrage-detention-per-diem-port-congestion-fmc-enforcement-container-maersk/602885/'],['FMC D&D','https://www.fmc.gov/detention-and-demurrage/']] },
+  { id:'rollover', cat:'부킹/데머리지', icon:'📦', title:'성수기 롤오버와 오버부킹', mech:'부킹', play:{case:0,label:'마감·부킹을 게임으로 (상하이)'},
+    scenario:'성수기, 마감이 임박한 중요 화물이 있다. 선사는 취소율을 감안해 선복 이상으로 오버부킹하는 관행이 있어 롤오버(다음 배로 밀림) 위험이 있다.',
+    q:'어떻게 하나?',
+    opts:[{t:'가장 싼 일반 요율로 예약하고 운을 맡긴다',c:false},
+      {t:'선사 롤오버율·정시성을 보고, 중요 화물은 확정선복(프리미엄)·조기예약·분산',c:true},
+      {t:'마감 직전에 몰아서 한 선사에 다 맡긴다',c:false},
+      {t:'롤오버는 선사 잘못이니 대비 불필요',c:false}],
+    explain:'롤오버는 성수기 최대 리스크. 선사별 정시성(schedule reliability) 데이터로 선택하고, 중요·마감 화물은 확정선복·조기예약·분산으로 방어한다.',
+    outcome:'성수기(추석·춘절 전, 골든위크)엔 오버부킹으로 롤오버가 급증. 데드프레이트·지연 위약금으로 이어진다. (게임의 마감·롤오버 페널티가 이 구조.)',
+    lesson:'싼 요율의 대가는 롤오버 리스크. 중요 화물엔 확정선복·분산이 보험.',
+    src:[['Portcast — 롤오버','https://www.portcast.io/blog/container-rollovers-understanding-the-causes-and-ways-to-minimize-rollovers'],['Kuehne+Nagel — Cargo rollover','https://info.oceania.kln.com/knowledgehub/cargo-rollover']] },
+  { id:'lcl', cat:'LCL 혼재/검역', icon:'🧪', title:'LCL 혼재의 오염·검역 리스크', mech:'클레임',
+    scenario:'한 LCL 콘솔에 화학 드럼, 식품, 그리고 미처리(열처리 안 된) 목재 팔레트가 함께 들어왔다.',
+    q:'옳은 조치는?',
+    opts:[{t:'공간 효율을 위해 그대로 혼재해 봉인',c:false},
+      {t:'화학·식품을 분리하고, ISPM15 처리(열처리/훈증)된 목재만 사용, CFS에서 하자 검수',c:true},
+      {t:'목재는 어차피 안 보이니 무시',c:false},
+      {t:'CFS 검수 없이 바로 봉인해 시간 절약',c:false}],
+    explain:'누출 드럼이 인접 화물을 적셔 변질·반응을 일으키고, 냄새·응결로 오염된다. 미처리 목재는 병해충 전파로 <b>ISPM15 위반 시 검역 반송</b>. CFS 인수 시 즉시 검사·하자 명기(클린 수취증 주의).',
+    outcome:'LCL 혼재 오염·파손은 반복 클레임 유형(대표 시나리오). ISPM15는 두께 6mm 초과 수출 목재에 열처리(심부 56℃/30분) 또는 훈증 후 마크를 의무화.',
+    lesson:'양립 불가 화물(액체·분말·식품·화학)은 분리. 목재는 ISPM15, 인수 검수는 봉인 전에.',
+    src:[['ECU360 — LCL 보험/리스크','https://ecu360.com/ocean-freight/less-than-container-load-lcl/lcl-shipping-insurance/'],['IPPC ISPM15','https://www.ippc.int/static/media/files/publication/en/2017/02/ISPM_15_ED_En_2017-02-10.pdf']] },
+  { id:'incoterms', cat:'무역조건', icon:'📑', title:'컨테이너 화물에 FOB? — Incoterms 함정', mech:'클레임',
+    scenario:'컨테이너(CY 인도) 화물인데 화주가 "FOB"로 진행해달라고 한다.',
+    q:'포워더의 올바른 조언은?',
+    opts:[{t:'FOB 그대로 진행 — 컨테이너에도 적합하다',c:false},
+      {t:'위험이전이 CY(터미널)에서 일어나므로 FCA가 정확하다고 안내',c:true},
+      {t:'무조건 EXW로 바꾸라고 한다',c:false},
+      {t:'Incoterms는 해상에 적용되지 않는다',c:false}],
+    explain:'FOB/CIF는 <b>본선(난간) 인도</b> 기준 — 재래·벌크용. 컨테이너는 터미널/CY에서 위험이 이전되므로 <b>FCA/CIP</b>가 정확. 잘못 쓰면 사고 시 위험이전 시점 분쟁이 생긴다.',
+    outcome:'포워더의 흔한 실수 1순위. Incoterms 2020은 위험이전 시점(인도=위험이전)을 정의하며, DAT는 DPU로 대체됐다.',
+    lesson:'컨테이너는 FCA/CIP, 본선인도(FOB/CIF)는 재래화물. 조건 하나가 책임·보험을 가른다.',
+    src:[['OVRSEA — Incoterms 2020','https://www.ovrsea.com/insights/en/guides/incoterms-2020-who-pays-what'],['Cooperative Logistics — 포워더 실수','https://blog.thecooperativelogisticsnetwork.com/2025/04/21/incoterms-for-freight-forwarders-common-mistakes-and-how-to-avoid-them/']] },
+];
+
+let filter='all';
+function prog(){ try{return JSON.parse(localStorage.getItem('casestudy_prog')||'{}');}catch(e){return {};} }
+function save(p){ try{localStorage.setItem('casestudy_prog',JSON.stringify(p));}catch(e){} }
+function cats(){ const cs=[...new Set(CASES.map(c=>c.cat))];
+  document.getElementById('cats').innerHTML=`<span class="chip ${filter==='all'?'on':''}" onclick="setF('all')">전체</span>`+
+    cs.map(c=>`<span class="chip ${filter===c?'on':''}" onclick="setF('${c}')">${c}</span>`).join(''); }
+window.setF=f=>{ filter=f; cats(); renderList(); };
+function scoreBar(){ const p=prog(); const done=Object.keys(p).length, right=Object.values(p).filter(x=>x.correct).length;
+  document.getElementById('score').innerHTML=`📊 학습 진행 <b>${done}/${CASES.length}</b> · 정답 <b>${right}</b> · <a href="train.html" style="color:#5aa0e8">🎮 교육 콘솔(체험 과제)로</a> · <span class="pending">실제 사고·공식 조사보고서 기반</span>`; }
+function renderList(){
+  const list=CASES.filter(c=>filter==='all'||c.cat===filter);
+  const p=prog();
+  document.getElementById('list').innerHTML=list.map(c=>{ const st=p[c.id];
+    return `<div class="card" id="card_${c.id}">
+      <div class="chead" onclick="toggle('${c.id}')"><div class="cico">${c.icon}</div>
+        <div class="ctitle"><b>${c.title}</b><br><span class="ctag">${c.cat}</span></div>
+        <div class="cstate">${st?(st.correct?'<span class="ok">✅ 정답</span>':'<span class="no">❌ 오답</span>'):'미학습'}</div></div>
+      <div class="cbody">
+        <div class="scn">📋 <b>상황</b> — ${c.scenario}</div>
+        <div class="q">❓ ${c.q}</div>
+        <div id="opts_${c.id}">${c.opts.map((o,i)=>`<button class="opt" onclick="answer('${c.id}',${i})">${o.t}</button>`).join('')}</div>
+        <div class="reveal" id="rev_${c.id}">
+          <div class="rv exp"><b>해설</b><br>${c.explain}</div>
+          <div class="rv out"><b>실제 사례·결말</b><br>${c.outcome}</div>
+          <div class="rv les"><b>교훈</b><br>${c.lesson}</div>
+          <div class="src">출처: ${c.src.map(s=>`<a href="${s[1]}" target="_blank">${s[0]}</a>`).join(' · ')}</div>
+          ${c.play?`<a class="play" href="train.html?case=${c.play.case}">🎮 ${c.play.label} — 교육 콘솔에서 체험</a>`:''}
+        </div>
+      </div></div>`;
+  }).join('');
+  // restore answered state
+  list.forEach(c=>{ if(p[c.id]!==undefined) markAnswered(c.id,p[c.id].pick,false); });
+}
+window.toggle=id=>{ document.getElementById('card_'+id).classList.toggle('open'); };
+window.answer=(id,pick)=>{ const c=CASES.find(x=>x.id===id); const correct=!!c.opts[pick].c;
+  const p=prog(); if(p[id]===undefined){ p[id]={pick,correct}; save(p); }
+  markAnswered(id,pick,true); scoreBar();
+  // update header state
+  const stEl=document.querySelector(`#card_${id} .cstate`); if(stEl) stEl.innerHTML=correct?'<span class="ok">✅ 정답</span>':'<span class="no">❌ 오답</span>';
+};
+function markAnswered(id,pick,open){ const c=CASES.find(x=>x.id===id); const card=document.getElementById('card_'+id); if(!card) return;
+  card.classList.add('answered'); if(open) card.classList.add('open');
+  const opts=card.querySelectorAll('.opt'); opts.forEach((el,i)=>{ el.disabled=true; el.style.cursor='default';
+    if(c.opts[i].c) el.classList.add('correct'); if(i===pick&&!c.opts[i].c) el.classList.add('wrong');
+    if(c.opts[i].c) el.innerHTML+='<span class="mk">✔ 정답</span>'; else if(i===pick) el.innerHTML+='<span class="mk">✘ 내 선택</span>'; }); }
+cats(); renderList(); scoreBar();
+</script>
+</body>
+</html>
