@@ -152,28 +152,89 @@ const MANIFESTS = {
   '20rf': ['produce','produce','produce','produce','frozen','frozen','frozen','frozen','frozen','frozen','frozen','carton','carton','produce','frozen','carton'],
 };
 let INV = [], nextId = 0;
-function loadManifest(){ INV = (curStage? curStage.cargo : MANIFESTS[curCon]).map(type=>({type, placed:false})); }
+let accepted = new Set();   // 수락한 부킹(화주) 인덱스
+const whoColorOf = bi => WHO_COLORS[bi % WHO_COLORS.length];
+function loadManifest(){
+  if(curStage){
+    INV=[];
+    curStage.bookings.forEach((b,bi)=>{ if(accepted.has(bi)) b.cargo.forEach(type=>INV.push({type, who:b.who, whoi:bi, placed:false})); });
+  } else {
+    INV = MANIFESTS[curCon].map(type=>({type, placed:false}));
+  }
+}
+// 부킹 R.T·청구액 (현재 컨테이너 기준)
+function bookingRT(b){ return Math.round(b.cargo.reduce((a,t)=>a+rtOf(t),0)*10)/10; }
 
-// ═══ 📅 스테이지 (작은 포워더 선적 스케줄) ═══
+// 화주(shipper) 색상 팔레트 — 부킹별 라벨
+const WHO_COLORS = [0xe8734f, 0x5aa0e8, 0x7fd18a, 0xecc94b, 0xc98ae0, 0xe07a9a, 0x6ad0c0, 0xd0905a];
+// ═══ 📅 스테이지 (작은 콘솔사 혼재 스케줄) — bookings: 화주 오퍼(합계 > 박스), 골라 싣는다 ═══
 const STAGES = [
-  { when:'9월 3주차 (수) 출항', client:'한빛무역', con:'20gp', to:'상하이', fx:1320, goal:{maxDmg:0},
-    brief:'첫 혼재 건! 부산→상하이 근거리 LCL — 여러 화물을 <b>한 박스에 전부</b> 싣고 <b>무손상</b>으로. (벽·이웃에 붙여 쌓아야 흔들림이 없어요)',
-    cargo:['carton','carton','carton','carton','carton','pallet','pallet','crate','crate','ibc','ibc','bigbag','bigbag','glass','glass','drum','drum'] },
-  { when:'9월 3주차 (토) 출항', client:'대양상사', con:'40gp', to:'싱가포르', fx:1350, goal:{maxDmg:1},
-    brief:'부산→싱가포르, 40ft 혼재 큰 건. 화물을 전부 싣고 손상 1개 이내로 — 꽉 채울수록 R.T 매출↑.',
-    cargo:['machine','ibc','ibc','ibc','pallet','pallet','pallet','crate','crate','pipe','pipe','bigbag','bigbag','bigbag','glass','glass','drum','drum','drum','carton','carton','carton','carton','carton','carton'] },
-  { when:'9월 4주차 (화) 출항', client:'신선물류', con:'20rf', to:'도쿄', fx:1310, goal:{maxDmg:0},
-    brief:'❄️ 부산→도쿄 냉동 혼재! 청과·냉동식품 전량·<b>무손상</b>. 냉동은 실수가 안 됩니다 (전기료 별도).',
-    cargo:['produce','produce','produce','produce','frozen','frozen','frozen','frozen','frozen','frozen','frozen','frozen','frozen','carton','carton','carton','carton'] },
-  { when:'9월 4주차 (금) 출항', client:'글로벌테크', con:'40hc', to:'로스앤젤레스', fx:1390, goal:{maxDmg:1},
-    brief:'부산→LA 태평양 횡단, 40HC 대량 혼재. 원양은 R.T 단가가 높아요 — 전량, 손상 1개 이내.',
-    cargo:['machine','machine','ibc','ibc','ibc','pallet','pallet','pallet','crate','crate','crate','pipe','pipe','pipe','bigbag','bigbag','bigbag','glass','glass','glass','drum','drum','drum','carton','carton','carton','carton','carton','carton','carton'] },
-  { when:'10월 1주차 (수) 출항', client:'정밀산업', con:'20gp', to:'두바이', fx:1420, goal:{maxDmg:0},
-    brief:'부산→두바이, 까다로운 혼재 — 판유리·중량물이 많아요. 배치 실력이 시험대. 전량·무손상!',
-    cargo:['glass','glass','glass','machine','ibc','ibc','pipe','pipe','drum','drum','carton','carton','carton','carton','bigbag','bigbag'] },
-  { when:'10월 1주차 (토) 출항', client:'한바다해운', con:'40hc', to:'로테르담', fx:1465, goal:{maxDmg:1},
-    brief:'🏆 최종 — 부산→로테르담 유럽 원거리 혼재! R.T 단가 최고. 대형 혼합 화물을 전부 실어 콘솔사의 실력을.',
-    cargo:['machine','machine','ibc','ibc','ibc','pallet','pallet','pallet','pallet','crate','crate','crate','pipe','pipe','pipe','bigbag','bigbag','bigbag','glass','glass','glass','drum','drum','drum','carton','carton','carton','carton','carton','carton','carton','carton'] },
+  { when:'9월 3주차 (수) 출항', client:'한빛무역 외', con:'20gp', to:'상하이', fx:1320, goal:{margin:12, maxDmg:0},
+    brief:'첫 혼재 건! 부산→상하이 근거리 LCL — 여러 화주의 오퍼 중 <b>골라 담아</b> 무손상으로. 박스는 하나, 다 못 실어요.',
+    bookings:[
+      {who:'한빛무역',   cargo:['carton','carton','carton','glass','glass']},
+      {who:'대성물산',   cargo:['pallet','pallet','crate','crate']},
+      {who:'삼진화학',   cargo:['drum','drum','drum']},
+      {who:'동방식품',   cargo:['bigbag','bigbag','carton','carton','carton']},
+      {who:'캐논코리아', cargo:['ibc','ibc','pallet']},
+      {who:'부산잡화',   cargo:['carton','carton','crate','bigbag']},
+      {who:'신라교역',   cargo:['pallet','carton','carton','glass']},
+    ] },
+  { when:'9월 3주차 (토) 출항', client:'대양상사 외', con:'40gp', to:'싱가포르', fx:1350, goal:{margin:20, maxDmg:1},
+    brief:'부산→싱가포르, 40ft 혼재 큰 건. 고R.T 화물을 잘 골라 꽉 채우세요 — 손상 1개 이내.',
+    bookings:[
+      {who:'대양상사',   cargo:['machine','ibc','ibc']},
+      {who:'글로벌팩',   cargo:['pallet','pallet','pallet','crate','crate']},
+      {who:'한성강업',   cargo:['pipe','pipe','ibc']},
+      {who:'삼진화학',   cargo:['drum','drum','drum']},
+      {who:'동방식품',   cargo:['bigbag','bigbag','bigbag','carton','carton','carton']},
+      {who:'유리코',     cargo:['glass','glass','carton','carton']},
+      {who:'부산잡화',   cargo:['carton','carton','carton','crate','bigbag']},
+      {who:'신라교역',   cargo:['pallet','pallet','glass','carton','carton']},
+    ] },
+  { when:'9월 4주차 (화) 출항', client:'신선물류 외', con:'20rf', to:'도쿄', fx:1310, goal:{margin:8, maxDmg:0},
+    brief:'❄️ 부산→도쿄 냉동 혼재! 냉동·냉장 화주만 골라 <b>무손상</b>으로. 냉동은 실수가 안 됩니다 (전기료 별도).',
+    bookings:[
+      {who:'신선물류',   cargo:['produce','produce','produce','frozen','frozen','frozen']},
+      {who:'오션델리',   cargo:['frozen','frozen','frozen','frozen','carton','carton']},
+      {who:'홋카이물산', cargo:['produce','produce','frozen','frozen','frozen']},
+      {who:'대양수산',   cargo:['frozen','frozen','frozen','frozen','carton','carton']},
+      {who:'부산냉장',   cargo:['produce','produce','carton','carton','frozen','frozen']},
+    ] },
+  { when:'9월 4주차 (금) 출항', client:'글로벌테크 외', con:'40hc', to:'로스앤젤레스', fx:1390, goal:{margin:150, maxDmg:1},
+    brief:'부산→LA 태평양 횡단, 40HC 대량 혼재. 원양은 R.T 단가가 높아 잘 채우면 크게 벌어요 — 손상 1개 이내.',
+    bookings:[
+      {who:'글로벌테크', cargo:['machine','machine','ibc','ibc']},
+      {who:'한성강업',   cargo:['pipe','pipe','pipe','ibc']},
+      {who:'대성물산',   cargo:['pallet','pallet','pallet','crate','crate','crate']},
+      {who:'삼진화학',   cargo:['drum','drum','drum']},
+      {who:'유리코',     cargo:['glass','glass','glass','carton','carton']},
+      {who:'동방식품',   cargo:['bigbag','bigbag','bigbag','carton','carton','carton']},
+      {who:'부산잡화',   cargo:['carton','carton','carton','carton','crate','bigbag']},
+      {who:'신라교역',   cargo:['pallet','pallet','glass','carton','carton']},
+    ] },
+  { when:'10월 1주차 (수) 출항', client:'정밀산업 외', con:'20gp', to:'두바이', fx:1420, goal:{margin:25, maxDmg:0},
+    brief:'부산→두바이, 까다로운 혼재 — 판유리·중량물이 많아요. 무엇을 실을지 배치 실력이 시험대. 무손상!',
+    bookings:[
+      {who:'정밀산업',   cargo:['glass','glass','glass','machine']},
+      {who:'한성강업',   cargo:['pipe','pipe','ibc','ibc']},
+      {who:'삼진화학',   cargo:['drum','drum','drum']},
+      {who:'동방식품',   cargo:['bigbag','bigbag','carton','carton','carton']},
+      {who:'부산잡화',   cargo:['carton','carton','carton','crate','glass']},
+      {who:'신라교역',   cargo:['pallet','pallet','carton','carton']},
+    ] },
+  { when:'10월 1주차 (토) 출항', client:'한바다해운 외', con:'40hc', to:'로테르담', fx:1465, goal:{margin:200, maxDmg:1},
+    brief:'🏆 최종 — 부산→로테르담 유럽 원거리 혼재! R.T 단가 최고. 최적의 화주 조합으로 콘솔사의 실력을.',
+    bookings:[
+      {who:'한바다해운', cargo:['machine','machine','ibc','ibc']},
+      {who:'한성강업',   cargo:['pipe','pipe','pipe','ibc']},
+      {who:'대성물산',   cargo:['pallet','pallet','pallet','pallet','crate','crate','crate']},
+      {who:'삼진화학',   cargo:['drum','drum','drum']},
+      {who:'유리코',     cargo:['glass','glass','glass','glass','carton','carton']},
+      {who:'동방식품',   cargo:['bigbag','bigbag','bigbag','carton','carton','carton','carton']},
+      {who:'부산잡화',   cargo:['carton','carton','carton','carton','crate','bigbag']},
+      {who:'신라교역',   cargo:['pallet','pallet','glass','glass','carton','carton']},
+    ] },
 ];
 let progress; try{ progress=JSON.parse(localStorage.getItem('cargo_progress')||'{"cleared":0,"cash":0}'); }catch(e){ progress={cleared:0,cash:0}; }
 let curStage=null, curStageIdx=-1;
@@ -302,7 +363,7 @@ window.renderStageSelect=()=>{
     return `<div class="stg ${cleared?'clr':cur?'cur':'lock'}" ${i<=progress.cleared?`onclick="startStage(${i})"`:''}>
       <div class="sh">${cleared?'✅':cur?'▶':'🔒'} Stage ${i+1} <span class="sc">${C.icon} ${C.name} LCL</span></div>
       <div class="sw">${s.when} · ${s.client} · 부산→${s.to}</div>
-      <div class="sf">🎯 화물 ${s.cargo.length}개 전량 · ${s.goal.maxDmg===0?'무손상':'손상 '+s.goal.maxDmg+' 이내'} · $${LANES[s.to].rate}/R.T · 박스 $${LANES[s.to].box[s.con]}</div></div>`;
+      <div class="sf">🎯 마진 ${s.goal.margin}만+ · ${s.goal.maxDmg===0?'무손상':'손상 '+s.goal.maxDmg+' 이내'} · 화주 ${s.bookings.length}곳 · $${LANES[s.to].rate}/R.T · 박스 $${LANES[s.to].box[s.con]}</div></div>`;
   }).join('');
   document.getElementById('stageSelect').style.display='flex';
 };
@@ -312,18 +373,41 @@ window.startStage=(i)=>{
   curStageIdx=i; curStage=STAGES[i];
   applyContainerSpec(curStage.con); buildContainer();
   document.getElementById('stageSelect').style.display='none';
-  clearAll(); resetView();
-  const C=CONTAINERS[curStage.con];
-  document.getElementById('modalBody').innerHTML=
-    `<h2>📋 Stage ${i+1} — ${curStage.client}</h2>`+
-    `<div style="font-size:13px;color:#666">${curStage.when} · ${C.icon} ${C.name} LCL 혼재</div><br>`+
-    `${curStage.brief}<br><br>`+
-    `<div style="font-size:13px">🎯 목표: 화물 <b>${curStage.cargo.length}개 전량 적재</b> · ${curStage.goal.maxDmg===0?'<b>무손상</b>':'손상 '+curStage.goal.maxDmg+'개 이내'}<br>🚢 부산→<b>${curStage.to}</b> · 판매 <b>$${LANES[curStage.to].rate}/R.T</b> · 박스 매입 <b>$${LANES[curStage.to].box[curStage.con]}</b> (환율 ₩${curStage.fx}/$)<br>💵 Σ(R.T×요율) − 박스값 − 부대비 − 클레임 = <b>혼재 마진</b></div>`+
-    `<div style="font-size:11.5px;color:#888;margin-top:6px">💡 R.T=max(중량t, 부피CBM). 벽·이웃 고정으로 흔들림 방지(안 되면 🔒라싱 12만/개). <b>꽉 채울수록 안 판 R.T가 줄어 마진↑</b></div>`+
-    `<button onclick="document.getElementById('modal').style.display='none'">🏗 작업 시작!</button>`;
-  document.getElementById('modal').style.display='flex';
+  accepted=new Set(); clearAll(); resetView();
+  renderBooking();
 };
 window.retryStage=()=>{ startStage(curStageIdx); };
+// ═══ 📑 부킹 화면 — 화주 오퍼 중 골라 담기 (합계 > 박스) ═══
+window.toggleBooking=(bi)=>{ if(accepted.has(bi)) accepted.delete(bi); else accepted.add(bi); renderBooking(); };
+function renderBooking(){
+  const s=curStage, C=CONTAINERS[s.con], L=LANES[s.to];
+  const capCBM=Math.round(CW*CD*CH*CELLV);
+  let accRT=0, accCBM=0, accItems=0, accRev=0;
+  s.bookings.forEach((b,bi)=>{ if(accepted.has(bi)){ const rt=bookingRT(b); accRT+=rt; accItems+=b.cargo.length; accRev+=rt*L.rate; accCBM+=cbmOf(b.cargo.reduce((a,t)=>a+TYPES[t].w*TYPES[t].d*TYPES[t].h,0)); } });
+  accRT=Math.round(accRT*10)/10; accCBM=Math.round(accCBM*10)/10;
+  const rows=s.bookings.map((b,bi)=>{
+    const on=accepted.has(bi), col='#'+whoColorOf(bi).toString(16).padStart(6,'0');
+    const rt=bookingRT(b), rev=Math.round(rt*L.rate);
+    const flags=[]; if(b.cargo.some(t=>TYPES[t].hazmat))flags.push('☣️위험물'); if(b.cargo.some(t=>TYPES[t].frozen||TYPES[t].chilled))flags.push('❄️냉동'); if(b.cargo.some(t=>TYPES[t].fragile))flags.push('⚠️파손'); if(b.cargo.some(t=>TYPES[t].heavy))flags.push('🏋중량');
+    const icons=b.cargo.map(t=>TYPES[t].icon).join('');
+    return `<div onclick="toggleBooking(${bi})" style="display:flex;align-items:center;gap:8px;padding:7px 9px;margin:4px 0;border-radius:9px;cursor:pointer;border:2px solid ${on?col:'#3a4150'};background:${on?'rgba(120,160,220,.12)':'transparent'}">`+
+      `<div style="width:12px;height:12px;border-radius:3px;background:${col};flex:none"></div>`+
+      `<div style="flex:1;text-align:left;font-size:12.5px"><b>${b.who}</b> <span style="opacity:.6">${icons}</span><br><span style="color:#8a93a5;font-size:11px">${b.cargo.length}개 · ${rt} R.T · ${flags.join(' ')||'일반'}</span></div>`+
+      `<div style="text-align:right;font-size:12px;flex:none"><b>$${rev}</b><br><span style="font-size:15px">${on?'✅':'⬜'}</span></div></div>`;
+  }).join('');
+  const over=accCBM>capCBM;
+  document.getElementById('modalBody').innerHTML=
+    `<h2>📑 Stage ${curStageIdx+1} · 부킹</h2>`+
+    `<div style="font-size:12px;color:#8a93a5">${s.when} · ${C.icon} ${C.name} · 부산→${s.to} · $${L.rate}/R.T · 박스 $${L.box[s.con]}</div>`+
+    `<div style="font-size:12px;margin:6px 0;color:#667">${s.brief}</div>`+
+    `<div style="max-height:40vh;overflow:auto;margin:0 -4px">${rows}</div>`+
+    `<div style="font-size:12.5px;margin-top:8px;padding:8px;border-radius:9px;background:rgba(120,140,180,.12)">수락 <b>${accItems}개 · ${accRT} R.T</b> · 예상 운임 <b>$${Math.round(accRev)}</b><br><span style="color:${over?'#e0714f':'#8a93a5'}">공간 ${accCBM}/${capCBM} CBM${over?' ⚠️ 초과 — 다 못 실어요':''}</span> · 🎯 마진 <b>${s.goal.margin}만+</b> · ${s.goal.maxDmg===0?'무손상':'손상 '+s.goal.maxDmg+' 이내'}</div>`+
+    `<div style="font-size:11px;color:#99a;margin-top:4px">💡 박스값 $${L.box[s.con]}는 고정 — 고R.T 화주를 골라 꽉 채울수록 마진↑. 수락했는데 못 실으면 롤오버(다음 배·재작업비).</div>`+
+    `<button ${accItems===0?'disabled style="opacity:.4"':''} onclick="startLoading()">🏗 ${accItems}개 적재 시작!</button>`+
+    `<button onclick="backToStages()" style="background:#5a6270">🗂 스케줄로</button>`;
+  document.getElementById('modal').style.display='flex';
+}
+window.startLoading=()=>{ if(accepted.size===0) return; loadManifest(); curSel=nextUnplaced(); document.getElementById('modal').style.display='none'; updateHUD(); flash('화물 목록에서 실을 것을 골라 바닥에 탭!'); };
 
 // ═══ 상태 ═══
 const occ = {};   // "i,j,k" -> cargoId
@@ -476,9 +560,7 @@ function showResult(cbmUsed){
   const mB=document.getElementById('modalBody');
   if(curStage){   // 📅 스테이지 판정 — 전량 적재 + 손상 제한, 그리고 손익 정산
     const g=curStage.goal;
-    const allLoaded = placed.length===INV.length;
-    const pass = allLoaded && dmgList.length<=g.maxDmg;
-    // 💱 LCL 혼재 마진 정산 (R.T 청구 − 박스값 − 부대비 − 클레임)
+    // 💱 LCL 혼재 마진 정산 (R.T 청구 − 박스값 − 부대비 − 클레임 − 롤오버)
     const L=LANES[curStage.to], fx=curStage.fx, usdRate=L.rate, box=L.box[curCon];
     const placedRT=Math.round(placed.reduce((a,p)=>a+rtOf(p.type),0)*10)/10;
     const incomeUSD=Math.round(placedRT*usdRate);                          // 화주 청구 운임(USD)
@@ -486,30 +568,32 @@ function showResult(cbmUsed){
     const usdNet=incomeUSD-box-dgUsd;                                       // USD 순액 (운임 − 박스 − DG)
     const usdNetKrw=usdNet*fx/10000;                                        // 만원
     const opsMargin=Math.round(placedRT*0.2*10)/10;                         // CFS+THC 마진 ₩2천/R.T
-    const doc=4;                                                            // 마스터 B/L ₩4만 (수입)
+    const blCount=new Set(placed.map(p=>p.whoi)).size, doc=blCount*4;       // 화주별 House B/L ₩4만 (수입)
     const reefer=CONTAINERS[curCon].reefer?40:0;
     const lashN=placed.filter(p=>p.lashed).length, lash=lashN*12;
     const claims=dmgList.reduce((a,p)=>a+(TYPES[p.type].val||30),0);        // 손상 = 화주 클레임 배상
+    const rollover=INV.length-placed.length, rollFee=rollover*5;            // 수락했는데 못 실음 = 롤오버 재작업비
     const totalWt=Math.round(placed.reduce((a,p)=>a+TYPES[p.type].wt,0)*10)/10;
     const payload=CONTAINERS[curCon].payload, overWt=Math.max(0,Math.round((totalWt-payload)*10)/10);
     const overFine=Math.round(overWt*30);                                  // 중량초과 벌금 ₩30만/톤
-    const margin=Math.round(usdNetKrw + opsMargin + doc - reefer - lash - claims - overFine);
+    const margin=Math.round(usdNetKrw + opsMargin + doc - reefer - lash - claims - overFine - rollFee);
     const fillPct=Math.round(rate*100);
+    const pass = margin>=g.margin && dmgList.length<=g.maxDmg;
     let earned=0;
     if(pass && curStageIdx===progress.cleared){ progress.cleared++; progress.cash+=margin; earned=margin;
       try{ localStorage.setItem('cargo_progress',JSON.stringify(progress)); }catch(e){} }
     const last = curStageIdx+1>=STAGES.length;
-    const costBits=[reefer?`❄️전기 ${reefer}`:'', lash?`🔒라싱 ${lash}`:'', claims?`⚠️클레임 ${claims}`:'', overFine?`⚖중량초과 ${overFine}`:''].filter(Boolean).join(' · ');
+    const costBits=[reefer?`❄️전기 ${reefer}`:'', lash?`🔒라싱 ${lash}`:'', claims?`⚠️클레임 ${claims}`:'', overFine?`⚖중량초과 ${overFine}`:'', rollFee?`📦롤오버 ${rollFee}`:''].filter(Boolean).join(' · ');
     mB.innerHTML=
       `<h2>${pass?'✅ 선적 완료!':'❌ 목표 미달'}</h2>`+
-      `부산→${curStage.to} · 적재 <b>${placed.length}/${INV.length}개</b> · ${cbmOf(cbmUsed)}CBM(${fillPct}%) · <b>${placedRT} R.T</b> · ${totalWt}/${payload}t${overWt?' ⚠️초과':''} · 손상 <b>${dmgList.length}</b>(허용 ${g.maxDmg})<br><br>`+
+      `부산→${curStage.to} · 화주 <b>${blCount}곳</b> · 적재 <b>${placed.length}개</b>${rollover?` <span style="color:#e0714f">(롤오버 ${rollover})</span>`:''} · ${cbmOf(cbmUsed)}CBM(${fillPct}%) · <b>${placedRT} R.T</b> · ${totalWt}/${payload}t${overWt?' ⚠️':''} · 손상 <b>${dmgList.length}</b>(허용 ${g.maxDmg})<br><br>`+
       (pass
-        ? `<div style="font-size:12px;color:#666;text-align:left;line-height:1.7">💵 운임 <b>${placedRT}R.T × $${usdRate} = $${incomeUSD}</b> − 박스 $${box}${dgUsd?` − ☣️DG $${dgUsd}`:''} = $${usdNet} × ₩${fx} → ${Math.round(usdNetKrw)}만<br>➕ 부대마진 CFS·THC ${opsMargin}만 · 서류 ${doc}만${costBits?`<br>➖ ${costBits}`:''}</div>`+
-          `<div style="font-size:22px;margin-top:6px">혼재 마진 <b style="color:${margin>=0?'#c05a46':'#b04040'}">${margin>=0?'+':''}${margin}만원</b></div>`+
-          `<div style="font-size:11px;color:#999">💡 박스값은 고정 — 빈 공간은 '안 판 R.T'라 마진↓(데드)</div>누적 수익 <b>${progress.cash}만원</b><br><br>`+
-          (last?`<div style="font-size:17px;color:#c05a46">🏆 모든 선적 완수 — 포워더 성공!</div><br>`:`<button onclick="startStage(${curStageIdx+1})">▶ 다음 스테이지</button>`)
-        : `<div style="color:#b04040;font-size:13.5px">${!allLoaded?`화물을 다 싣지 못했어요 (${placed.length}/${INV.length}) — 회전·재배치로 빈틈을 메우세요`:`손상이 많아요 (${dmgList.length} > ${g.maxDmg}) — 유리는 맨 위, 중량은 바닥, 벽·이웃에 붙이거나 🔒라싱`}</div><br>`+
-          `<button onclick="retryStage()">🔄 다시 작업</button>`)+
+        ? `<div style="font-size:12px;color:#666;text-align:left;line-height:1.7">💵 운임 <b>${placedRT}R.T × $${usdRate} = $${incomeUSD}</b> − 박스 $${box}${dgUsd?` − ☣️DG $${dgUsd}`:''} = $${usdNet} × ₩${fx} → ${Math.round(usdNetKrw)}만<br>➕ 부대마진 CFS·THC ${opsMargin}만 · 서류 ${doc}만(B/L ${blCount}건)${costBits?`<br>➖ ${costBits}`:''}</div>`+
+          `<div style="font-size:22px;margin-top:6px">혼재 마진 <b style="color:${margin>=0?'#c05a46':'#b04040'}">${margin>=0?'+':''}${margin}만원</b> <span style="font-size:12px;color:#999">/ 목표 ${g.margin}만</span></div>`+
+          `<div style="font-size:11px;color:#999">💡 고R.T 화주를 골라 꽉 채울수록 마진↑</div>누적 수익 <b>${progress.cash}만원</b><br><br>`+
+          (last?`<div style="font-size:17px;color:#c05a46">🏆 모든 선적 완수 — 콘솔사 성공!</div><br>`:`<button onclick="startStage(${curStageIdx+1})">▶ 다음 스테이지</button>`)
+        : `<div style="color:#b04040;font-size:13.5px">${dmgList.length>g.maxDmg?`손상이 많아요 (${dmgList.length} > ${g.maxDmg}) — 유리는 맨 위, 중량은 바닥, 벽·이웃 고정이나 🔒라싱`:`혼재 마진이 목표에 못 미쳐요 (${margin} < ${g.margin}만) — 고R.T 화주를 더 받아 꽉 채우거나 롤오버를 줄이세요`}</div><br>`+
+          `<button onclick="retryStage()">🔄 다시 부킹</button>`)+
       `<button onclick="backToStages()" style="background:#5a6270">🗂 스케줄로</button>`;
     document.getElementById('modal').style.display='flex';
     return;
@@ -571,7 +655,7 @@ function tapPlace(x,y){
   const fc=floorCell(x,y); if(!fc) return;
   const inv=INV[curSel];
   const p=place(inv.type,rot,fc.i,fc.j);
-  if(p){ inv.placed=true; p.invIdx=curSel; handCost+=handlingCost(p.w,p.h,p.k); curSel=nextUnplaced(curSel); updateHUD(); }
+  if(p){ inv.placed=true; p.invIdx=curSel; p.who=inv.who; p.whoi=inv.whoi; handCost+=handlingCost(p.w,p.h,p.k); curSel=nextUnplaced(curSel); updateHUD(); }
   else flash('여기엔 안 들어가요 (공간 부족/지지 없음)');
 }
 window.pickInv=(idx)=>{ if(departed||INV[idx].placed||replayTimer) return; curSel=idx; updateHUD(); flash(`선택: ${TYPES[INV[idx].type].icon} ${TYPES[INV[idx].type].name} — 바닥에 탭!`); };
@@ -593,19 +677,20 @@ function solveOptimal(){
         sc -= (i*2+j);                        // 안쪽·왼쪽부터 채우기
         if(!best||sc>best.sc) best={sc,i,j,k,rot:rr,f}; } }
     if(best){ for(let di=0;di<best.f.w;di++)for(let dj=0;dj<best.f.d;dj++)for(let dk=0;dk<best.f.h;dk++) vocc[key(best.i+di,best.j+dj,best.k+dk)]=it.idx;
-      plan.push({type:it.type,rot:best.rot,i:best.i,j:best.j}); } }
+      plan.push({type:it.type,rot:best.rot,i:best.i,j:best.j,idx:it.idx}); } }
   return plan;
 }
 let replayTimer=null;
 window.aiDemo=()=>{
   if(replayTimer||departed) return;
+  if(curStage && accepted.size===0){ accepted=new Set(curStage.bookings.map((_,bi)=>bi)); }  // 부킹 전부 수락 후 최적 적재
   clearAll();
   const plan=solveOptimal();
   flash('🤖 AI가 최적 순서로 적재하는 중…'); let idx=0;
   replayTimer=setInterval(()=>{
     if(idx>=plan.length){ clearInterval(replayTimer); replayTimer=null; setTimeout(()=>depart(), 800); return; }
     const s=plan[idx++]; const p=place(s.type,s.rot,s.i,s.j);
-    if(p){ markInvPlaced(s.type); handCost+=handlingCost(p.w,p.h,p.k); p.fall=2.6; updateHUD(); }
+    if(p){ const inv=INV[s.idx]; if(inv){ inv.placed=true; p.invIdx=s.idx; p.who=inv.who; p.whoi=inv.whoi; } handCost+=handlingCost(p.w,p.h,p.k); p.fall=2.6; updateHUD(); }
   }, 400);
 };
 canvas.addEventListener('pointerdown',e=>{try{canvas.setPointerCapture(e.pointerId);}catch(_){}onDown(e.clientX,e.clientY);});
@@ -621,15 +706,16 @@ function pd(e){return Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.tou
 function updateHUD(){
   const cbm=placed.reduce((a,p)=>a+p.w*p.d*p.h,0);
   const remain=INV.filter(x=>!x.placed).length;
-  const stageTag = curStage? `📋 St${curStageIdx+1} · 🎯전량${curStage.goal.maxDmg===0?'·무손상':''}` : '';
+  const stageTag = curStage? `📋 St${curStageIdx+1} · 🎯마진 ${curStage.goal.margin}만+` : '';
   const lashN=placed.filter(p=>p.lashed).length;
   const rtSum=Math.round(placed.reduce((a,p)=>a+rtOf(p.type),0)*10)/10;
   const wt=Math.round(placed.reduce((a,p)=>a+TYPES[p.type].wt,0)*10)/10, pay=CONTAINERS[curCon].payload;
-  document.getElementById('score').innerHTML=`${CONTAINERS[curCon].icon} <b>${CONTAINERS[curCon].name}</b> ${stageTag} · 적재 <b>${placed.length}/${INV.length}</b> · <b>${cbmOf(cbm)} CBM</b>(${Math.round(cbm/(CW*CD*CH)*100)}%) · <b>${rtSum} R.T</b> · <span style="color:${wt>pay?'#e07050':'inherit'}">${wt}/${pay}t</span>${lashN?` · 🔒${lashN}`:''}<br>남은 화물: ${remain}개 · 다 실으면 ⚓ 출항`;
-  // 화물 목록 — 클릭해서 선택, 배치된 건 흐리게
+  document.getElementById('score').innerHTML=`${CONTAINERS[curCon].icon} <b>${CONTAINERS[curCon].name}</b> ${stageTag} · 적재 <b>${placed.length}/${INV.length}</b> · <b>${cbmOf(cbm)} CBM</b>(${Math.round(cbm/(CW*CD*CH)*100)}%) · <b>${rtSum} R.T</b> · <span style="color:${wt>pay?'#e07050':'inherit'}">${wt}/${pay}t</span>${lashN?` · 🔒${lashN}`:''}<br>남은 화물: ${remain}개 · ⚓ 출항 아무때나 (실은 것만 정산)`;
+  // 화물 목록 — 클릭해서 선택, 화주별 색 라벨, 배치된 건 흐리게
   document.getElementById('next').innerHTML=INV.map((item,idx)=>{
     const T=TYPES[item.type]; const cls=item.placed?'done':idx===curSel?'cur':'';
-    return `<div class="card ${cls}" onclick="pickInv(${idx})">${T.icon}<br>${T.name}</div>`;
+    const col=item.whoi!=null?'#'+whoColorOf(item.whoi).toString(16).padStart(6,'0'):'transparent';
+    return `<div class="card ${cls}" onclick="pickInv(${idx})" style="border-top:3px solid ${col}">${T.icon}<br>${T.name}${item.who?`<br><span style="font-size:9px;opacity:.6">${item.who}</span>`:''}</div>`;
   }).join('');
   const cur = curSel>=0 && !INV[curSel]?.placed ? INV[curSel] : null;
   document.getElementById('bottom').innerHTML = remain>0
@@ -649,13 +735,15 @@ const il=new THREE.DirectionalLight(0xffffff,0.95); il.position.set(3,5,4); insS
 const insC=new THREE.PerspectiveCamera(38,1,0.1,50);
 let insMesh=null, insYaw=0.6, insPitch=0.35, insActive=false, insAuto=true, idrag=false, ilx=0, ily=0;
 function sizeIns(){ const s=Math.min(300, Math.floor(innerWidth*0.72)); insCanvas.style.width=s+'px'; insCanvas.style.height=s+'px'; insR.setSize(s,s,false); insC.aspect=1; insC.updateProjectionMatrix(); }
-window.openInspector=(type)=>{
+window.openInspector=(type,who,whoi)=>{
   const t=TYPES[type];
   if(insMesh) insS.remove(insMesh);
   insMesh=buildCargo(type,t.w,t.h,t.d); insS.add(insMesh);
   const maxd=Math.max(t.w,t.h,t.d); insC.position.set(0, t.h*0.15, maxd*2.5); insC.lookAt(0,0,0);
   const sc = t.fragile?'#ecc94b':t.hazmat?'#e08a5a':t.heavy?'#e0705a':'#9de89a';
+  const whoCol = whoi!=null?'#'+whoColorOf(whoi).toString(16).padStart(6,'0'):'#8ad0e8';
   document.getElementById('iinfo').innerHTML=
+    (who?`<div style="font-size:12px;margin-bottom:3px"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${whoCol};vertical-align:middle"></span> 화주 <b>${who}</b></div>`:'')+
     `<b>${t.icon} ${t.name}</b><br>`+
     `규격 ${(t.w*CELLX).toFixed(1)}×${(t.d*CELLZ).toFixed(1)}×${(t.h*CELLY).toFixed(1)} m · <b>${cbmOf(t.w*t.d*t.h)} CBM</b> · ${t.wt}t<br>`+
     `과금 <b>${rtOf(type)} R.T</b> <span style="color:#99a">(max(${t.wt}t, ${cbmOf(t.w*t.d*t.h)}CBM) — ${t.wt>=cbmOf(t.w*t.d*t.h)?'중량':'부피'}기준)</span> · 화물가 ${t.val}만<br>`+
@@ -667,10 +755,10 @@ window.openInspector=(type)=>{
 };
 window.closeInspector=()=>{ document.getElementById('inspector').style.display='none'; insActive=false; };
 window.inspectSel=()=>{
-  let type=null;
-  if(selectedP) type=selectedP.type;
-  else if(curSel>=0 && INV[curSel] && !INV[curSel].placed) type=INV[curSel].type;
-  if(type) openInspector(type); else flash('화물을 먼저 선택하세요 (목록 카드나 실린 화물 탭)');
+  let type=null, who=null, whoi=null;
+  if(selectedP){ type=selectedP.type; who=selectedP.who; whoi=selectedP.whoi; }
+  else if(curSel>=0 && INV[curSel] && !INV[curSel].placed){ type=INV[curSel].type; who=INV[curSel].who; whoi=INV[curSel].whoi; }
+  if(type) openInspector(type,who,whoi); else flash('화물을 먼저 선택하세요 (목록 카드나 실린 화물 탭)');
 };
 // 🔒 라싱 — 선택한 화물을 고정 (흔들림 면제, 대신 라싱비). 벽·이웃에 잘 붙이면 라싱 불필요
 window.lashSel=()=>{
