@@ -25,6 +25,12 @@
   input{background:#0c1826;border:1px solid #26405c;color:#e6ecf3;border-radius:6px;padding:7px 9px;font-size:12.5px;font-family:inherit;}
   .btn{background:#2f6fd0;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit;margin:3px 3px 0 0;}
   .btn.alt{background:#3a4657;} .muted{color:#8fa3bd;font-size:12px;} code{background:#0c1826;padding:1px 5px;border-radius:4px;font-size:11px;}
+  #ob{position:fixed;inset:0;background:rgba(6,10,18,.82);display:none;align-items:center;justify-content:center;z-index:100;padding:16px;}
+  #ob.on{display:flex;} .obbox{background:#161d29;border:1px solid #2a3547;border-radius:14px;max-width:440px;width:100%;padding:22px;}
+  .obbox h2{margin:0 0 6px;font-size:19px;} .obbox .step{display:flex;gap:9px;margin:7px 0;font-size:13px;} .obbox .step .n{color:#7fc0ff;font-weight:bold;flex:none;}
+  .obbox input{width:100%;font-size:15px;padding:10px;margin:12px 0 6px;}
+  .obbox .go{width:100%;background:#e8734f;padding:11px;font-size:15px;}
+  #idbar{margin:6px 0 12px;font-size:12.5px;color:#9fb0c8;} #idbar b{color:#7fc0ff;}
 </style>
 </head>
 <body>
@@ -32,6 +38,7 @@
   <h1>🎓 방과후 콘솔 아카데미</h1>
   <div class="sub">부산 신항 콘솔사 사원 교육 과정 — <b>직급별 트랙</b>으로 <b>📚 사례 학습(판단)</b>과 <b>🎮 교육 콘솔(체험)</b>을 함께.
     · <a href="casestudy.html">사례 전체</a> · <a href="train.html">교육 콘솔</a> · <a href="bench.html">AI 벤치마크</a></div>
+  <div id="idbar"></div>
 
   <div class="card"><b>📊 나의 학습 현황</b>
     <div class="stat" id="kpis" style="margin-top:8px"></div>
@@ -41,16 +48,28 @@
 
   <div class="card"><b>🗂 카테고리별 정답률</b><div id="cats" style="margin-top:6px"></div></div>
 
-  <div class="card"><b>☁ 클라우드(팀 공유) — 선택</b>
-    <div class="muted" style="margin:4px 0 8px">Supabase를 연결하면 제출·정답이 팀 리더보드로 공유됩니다. 미연결 시 이 브라우저에만 저장(로컬).</div>
+  <details class="card"><summary style="cursor:pointer"><b>☁ 서버 설정</b> <span class="muted" id="sbStatus"></span> <span class="muted">— 보통 손댈 필요 없음</span></summary>
+    <div class="muted" style="margin:8px 0">기본으로 <b>팀 서버</b>에 연결됩니다(제출·정답·AI 기준선 공유). 다른 프로젝트로 바꾸려면 아래 입력.</div>
     <input id="sbUrl" placeholder="Supabase URL (https://xxx.supabase.co)" style="width:100%;margin-bottom:6px">
-    <input id="sbKey" placeholder="Publishable key (sb_publishable_...)" style="width:100%;margin-bottom:6px">
-    <button class="btn" onclick="saveCloud()">연결 저장</button>
-    <button class="btn alt" onclick="clearCloud()">해제(로컬)</button>
-    <span class="muted" id="sbStatus"></span>
-    <div class="muted" style="margin-top:8px">① <code>supabase/consoltrain.sql</code> 실행 → ② Settings→API의 <b>Exposed schemas</b>에 <code>consoltrain</code> 추가 → ③ 위에 URL·key 입력. (RLS: anon insert/select)</div>
-  </div>
+    <input id="sbKey" placeholder="anon / publishable key" style="width:100%;margin-bottom:6px">
+    <button class="btn" onclick="saveCloud()">이 서버로 연결</button>
+    <button class="btn alt" onclick="clearCloud()">팀 기본 서버로</button>
+  </details>
 </div>
+
+<!-- 첫 방문 온보딩 -->
+<div id="ob"><div class="obbox">
+  <h2>🎓 방과후 콘솔 아카데미에 오신 걸 환영합니다</h2>
+  <div class="muted">부산 신항 콘솔사 신입이 되어, 실제 업무로 배웁니다.</div>
+  <div style="margin:10px 0">
+    <div class="step"><span class="n">1</span><span>📚 <b>사례 학습</b> — 실제 사고를 읽고 판단</span></div>
+    <div class="step"><span class="n">2</span><span>🎮 <b>교육 콘솔</b> — 컨테이너를 직접 실어 채점</span></div>
+    <div class="step"><span class="n">3</span><span>🤖 <b>나 vs AI</b> — AI 기준선을 넘어라</span></div>
+  </div>
+  <input id="obName" placeholder="이름(닉네임)을 입력하세요" maxlength="10">
+  <button class="btn go" onclick="startOnboard()">시작하기</button>
+  <div class="muted" style="margin-top:8px">※ 이름은 팀 리더보드에 기록됩니다. 나중에 아무 때나 바꿀 수 있어요.</div>
+</div></div>
 
 <script src="cloud.js"></script>
 <script>
@@ -127,15 +146,25 @@ function renderCats(){
   document.getElementById('cats').innerHTML=rows;
 }
 // ☁ 클라우드 설정 (연결값만 저장 — 실제 동기화는 cloud.js/Supabase 연동 시)
-function loadCloud(){ const c=J('sb_config'); if(c){ document.getElementById('sbUrl').value=c.url||''; document.getElementById('sbKey').value=c.key||'';
-    document.getElementById('sbStatus').innerHTML=' <span style="color:#6bd08a">● 연결됨(설정 저장)</span>'; }
-  else document.getElementById('sbStatus').innerHTML=' <span class="muted">● 로컬 저장(미연결)</span>'; }
+function loadCloud(){ const c=J('sb_config');
+  if(c){ document.getElementById('sbUrl').value=c.url||''; document.getElementById('sbKey').value=c.key||'';
+    document.getElementById('sbStatus').innerHTML='<span style="color:#e0b070">● 커스텀 서버</span>'; }
+  else document.getElementById('sbStatus').innerHTML='<span style="color:#6bd08a">● 팀 기본 서버 연결됨</span>'; }
 window.saveCloud=()=>{ const url=document.getElementById('sbUrl').value.trim(), key=document.getElementById('sbKey').value.trim();
-  if(!url||!key){ alert('URL과 publishable key를 입력하세요'); return; }
-  localStorage.setItem('sb_config',JSON.stringify({url,key})); loadCloud(); };
-window.clearCloud=()=>{ localStorage.removeItem('sb_config'); document.getElementById('sbUrl').value=''; document.getElementById('sbKey').value=''; loadCloud(); };
+  if(!url||!key){ alert('URL과 key를 입력하세요'); return; }
+  localStorage.setItem('sb_config',JSON.stringify({url,key})); alert('저장됨 — 새로고침하면 적용됩니다.'); loadCloud(); };
+window.clearCloud=()=>{ localStorage.removeItem('sb_config'); document.getElementById('sbUrl').value=''; document.getElementById('sbKey').value=''; alert('팀 기본 서버로 — 새로고침하면 적용됩니다.'); loadCloud(); };
 
-renderKPIs(); renderTracks(); renderCats(); loadCloud();
+// 👤 온보딩 / 신원
+function trainee(){ return localStorage.getItem('trainee')||''; }
+function renderId(){ const n=trainee();
+  document.getElementById('idbar').innerHTML = n ? `👤 교육생 <b>${n}</b> · <a href="#" onclick="changeName();return false">이름 변경</a>` : ''; }
+window.startOnboard=()=>{ const v=(document.getElementById('obName').value||'').trim(); if(!v){ alert('이름을 입력하세요'); return; }
+  localStorage.setItem('trainee', v); document.getElementById('ob').classList.remove('on'); renderId(); };
+window.changeName=()=>{ document.getElementById('obName').value=trainee(); document.getElementById('ob').classList.add('on'); };
+
+renderKPIs(); renderTracks(); renderCats(); loadCloud(); renderId();
+if(!trainee()) document.getElementById('ob').classList.add('on');   // 첫 방문 온보딩
 // 클라우드 연결 시 AI 기준선 로드 → 트랙에 "나 vs AI" 표시
 if(window.Cloud && Cloud.enabled()){ Cloud.aiBaseline().then(d=>{ if(d&&d.length){ d.forEach(r=>aiBase[r.case_idx]=r); renderTracks(); } }); }
 </script>

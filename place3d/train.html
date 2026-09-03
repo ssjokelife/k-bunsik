@@ -37,7 +37,7 @@
   <a href="academy.html" style="color:#5aa0e8;font-size:12.5px;text-decoration:none">🎓 아카데미</a>
   <a href="casestudy.html" style="color:#5aa0e8;font-size:12.5px;text-decoration:none">📚 사례 학습</a>
   <span class="sp"></span>
-  <span class="muted">교육생</span><input id="who" value="김신입" maxlength="10">
+  <span class="muted">교육생</span><input id="who" value="김신입" maxlength="10" onchange="try{localStorage.setItem('trainee',this.value)}catch(e){}">
   <span class="muted" id="engine">엔진 로딩…</span>
 </div>
 <div id="main">
@@ -152,6 +152,7 @@ function renderLB(idx){ let a; try{a=JSON.parse(localStorage.getItem('train_lb_'
 }
 
 fillCases();
+(()=>{ const t=localStorage.getItem('trainee'); if(t) document.getElementById('who').value=t; })();
 (async()=>{ for(let i=0;i<80&&!ready();i++) await sleep(150);
   document.getElementById('engine').textContent = ready()?'엔진 준비됨 ✅':'엔진 로딩 실패';
   if(ready()){ const m=location.search.match(/[?&]case=(\d)/); const ci=m?Math.min(5,Math.max(0,+m[1])):0;
