@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>📋 코로더·CFS 업무 흐름 — 신입이 알아야 할 전부</title>
+<meta name="description" content="LCL 혼재 코로더/CFS의 실제 업무를 전 과정·서류·관계자·마감·비용·예외까지 상세히. 규정·업계자료 기반.">
+<meta property="og:title" content="코로더·CFS 업무 흐름 — 실무 백과">
+<meta property="og:image" content="og.png">
+<style>
+  *{box-sizing:border-box;} body{margin:0;background:#0f141c;color:#e6ecf3;font-family:'Malgun Gothic','Segoe UI',sans-serif;line-height:1.65;}
+  a{color:#5aa0e8;} .wrap{max-width:900px;margin:0 auto;padding:20px 16px 70px;}
+  h1{font-size:22px;margin:0 0 4px;} .sub{color:#8fa3bd;font-size:13px;margin-bottom:12px;}
+  .nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+  .nav a{background:#18202e;border:1px solid #26303f;border-radius:16px;padding:5px 11px;font-size:12px;text-decoration:none;}
+  h2{font-size:18px;margin:26px 0 4px;border-left:4px solid #2f9be0;padding-left:9px;}
+  .h2sub{color:#8fa3bd;font-size:12.5px;margin:0 0 10px 13px;}
+  .card{background:#161d29;border:1px solid #263243;border-radius:11px;margin:9px 0;overflow:hidden;}
+  .step{padding:12px 14px;cursor:pointer;display:flex;gap:11px;align-items:flex-start;}
+  .step:hover{background:#1a2334;}
+  .num{flex:none;width:30px;height:30px;border-radius:50%;background:#12385f;color:#8fd0ff;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;}
+  .stitle{flex:1;} .stitle b{font-size:15px;} .stitle .en{color:#8fa3bd;font-size:11.5px;}
+  .stitle .who{font-size:11.5px;color:#e0b070;margin-top:2px;}
+  .sbody{display:none;padding:0 14px 14px 55px;font-size:13px;}
+  .card.open .sbody{display:block;}
+  .kv{margin:5px 0;} .kv .k{color:#7fc0ff;font-size:11.5px;font-weight:bold;}
+  .doc{display:inline-block;background:#0d1a2a;border:1px solid #244468;border-radius:6px;padding:1px 7px;font-size:11px;margin:2px 3px 0 0;color:#bcd8f5;}
+  .est{display:inline-block;background:#3a2a12;color:#e0a060;border-radius:5px;padding:0 6px;font-size:10.5px;margin-left:4px;}
+  .playl{display:inline-block;margin-top:8px;background:#e8734f;color:#fff;text-decoration:none;border-radius:7px;padding:6px 12px;font-size:12.5px;font-weight:bold;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin:6px 0;} th,td{border:1px solid #26303f;padding:7px 9px;text-align:left;vertical-align:top;} th{background:#1c2635;color:#bcd0e8;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;} @media(max-width:640px){ .grid{grid-template-columns:1fr;} table{font-size:11.5px;} }
+  .box{background:#161d29;border:1px solid #263243;border-radius:10px;padding:11px 13px;font-size:12.5px;}
+  .box b{color:#cfe4ff;} .ladder{list-style:none;padding:0;margin:6px 0;} .ladder li{padding:7px 10px;margin:5px 0;background:#12233a;border-radius:8px;border-left:3px solid #2f9be0;font-size:12.5px;}
+  .ladder li b{color:#7fc0ff;} .warn{color:#e0714f;}
+  .muted{color:#8fa3bd;font-size:12px;} code{background:#0c1826;padding:1px 5px;border-radius:4px;font-size:11px;}
+  .src{font-size:11.5px;color:#7f97b5;line-height:1.9;}
+  .note{background:#12324a;border-left:4px solid #2f9be0;border-radius:8px;padding:10px 13px;font-size:12.5px;margin:10px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📋 코로더·CFS 업무 흐름 — 신입이 알아야 할 전부</h1>
+  <div class="sub">LCL 혼재 코로더/NVOCC와 CFS의 <b>실제 업무 전 과정</b>을 단계·서류·관계자·전산·마감·비용·예외까지.
+    규정·업계 자료 기반(실무자 검증 전, <span class="est">추정</span> 표기). · <a href="academy.html">🎓 아카데미</a> · <a href="index.html">홈</a></div>
+  <div class="nav">
+    <a href="#flow">전 과정 11단계</a><a href="#docs">서류</a><a href="#party">관계자</a><a href="#sys">전산</a>
+    <a href="#time">마감(cut-off)</a><a href="#cost">비용</a><a href="#exc">예외·사고</a><a href="#src">출처</a>
+  </div>
+
+  <div class="note">💡 <b>왜 코로더인가</b> — 선사에서 컨테이너 한 통(FCL)을 사서, 같은 목적지 여러 화주의 소량 화물(LCL)을 <b>한 박스에 혼재</b>해
+    되판다. 박스값은 고정 → <b>많이 채울수록(소진율↑) 마진↑</b>. 이 문서의 모든 단계는 "무손상으로 꽉 채워 제 시간에 보낸다"로 수렴한다.</div>
+
+  <h2 id="flow">🔄 전 과정 11단계</h2>
+  <div class="h2sub">각 단계를 눌러 상세히 — 행위 · 관계자 · 서류 · 전산 · 마감 · 비용 · 판단. (🎮 표시는 우리 시뮬로 직접 체험)</div>
+  <div id="steps"></div>
+
+  <h2 id="docs">📄 핵심 서류</h2>
+  <div class="h2sub">누가 · 언제 · 무엇을 발행하나. 3계층(화주→코로더→선사)이 핵심.</div>
+  <div class="box"><table><tr><th>서류</th><th>발행 주체 · 시점</th><th>핵심 기재</th></tr><tbody id="docsT"></tbody></table></div>
+  <div class="note">🔑 <b>HBL vs MBL</b> — <b>House B/L</b>: 코로더가 <b>실화주</b>에게 발행(Shipper=실수출자). <b>Master B/L</b>: 선사가 <b>코로더</b>에게 발행(Shipper=코로더, Consignee=도착지 에이전트). 적하목록도 마스터(선사)/하우스(포워더)로 나뉘고, <b>정정은 작성책임자만</b> 가능.</div>
+
+  <h2 id="party">👥 관계자 · 역할</h2>
+  <div class="h2sub">정보가 어디서 오고 어디로 가나.</div>
+  <div class="grid" id="party"></div>
+
+  <h2 id="sys">💻 전산 · 시스템 (한국)</h2>
+  <div class="box" id="sys"></div>
+
+  <h2 id="time">⏱ 타임라인 · 마감(Cut-off)</h2>
+  <div class="h2sub">부킹→출항까지의 데드라인. 하나라도 놓치면 <span class="warn">롤오버</span>(다음 배).</div>
+  <ul class="ladder" id="ladder"></ul>
+  <div class="muted">※ 마감시간·free time은 선사·CFS·항로·계약별 편차 큼 — 시뮬 기본값으로만.</div>
+
+  <h2 id="cost">💰 비용 흐름</h2>
+  <div class="grid" id="cost"></div>
+
+  <h2 id="exc">⚠️ 예외 · 사고 처리</h2>
+  <div id="exc"></div>
+
+  <h2 id="src">📚 출처 · 신뢰도</h2>
+  <div class="note"><b>확실(규정·1차)</b>: 적하목록 신고시한(관세청), VGM 의무·미제출 선적불가(선사), 데머리지/디텐션 정의, 한국 수출 부대비 항목·요율(KCLA). <b>대체로 확실(업계 가이드)</b>: 11단계 프로세스·R.T=W/M·HBL/MBL 발행주체·콘솔 대기 2~7일. <b><span class="est">추정</span></b>: 담당자의 하루 순서, 자주 하는 실수·병목, 마진=소진율 구조, 냉동전기·라싱 세부요율 — <b>실무자 검증 필요.</b></div>
+  <div class="src" id="src"></div>
+</div>
+
+<script>
+const E='<span class="est">추정</span>';
+const STEPS=[
+ {n:1,t:'부킹 접수',en:'Booking / Pre-Alert',who:'화주/포워더 → 코로더',
+  act:'화주가 shipper·consignee·품명·중량·CBM·목적항·희망 선박을 전달. 코로더는 항로·스케줄·선복을 확인하고 선사에 박스(FCL) 스페이스를 부킹, 화주에 부킹 컨펌 발행. 목적지별 LCL을 모아 한 컨테이너를 채우고, 부족하면 타 포워더에 조인트 콘솔 요청.',
+  docs:['부킹 컨펌','S/R(선적요청서)'],sys:'선사 e-부킹',cut:'해당 목적항 콘솔 스케줄(주간/격주)',cost:'—',
+  judge:'언제 한 박스가 찰까(콘솔 스케줄) · 어느 선사·항차에 붙일까 · 최소 R.T(minimum) 확보 여부.', play:{h:'academy.html',l:'부킹 골라보기'}},
+ {n:2,t:'S/O 발행',en:'Shipping Order',who:'선사 발행',
+  act:'S/R 접수 후 선사가 화주·본선 일등항해사 앞으로 S/O(선적지시서)를 발행 = "이 화물을 실어라"는 지시.',
+  docs:['S/O'],sys:'선사',cut:'—',cost:'—',judge:'선적 지시 내용·선박·항차 확인.'},
+ {n:3,t:'CFS 반입',en:'Cargo receipt',who:'트럭킹 → CFS',
+  act:'내륙운송(트럭)이 화물을 지정 CFS로 반입. CFS 직원이 부킹 내역과 대조·검수 후 반입 수취증(반입계/Dock Receipt) 발행.',
+  docs:['반입계 / Dock Receipt'],sys:'CFS 창고 시스템',cut:'CFS 반입 마감(콘솔 컷)',cost:'CFS 반입·조작료',
+  judge:'부킹과 실물 대조 · 하자 여부 즉시 기재(클린 수취증 주의).'},
+ {n:4,t:'검량 · 검측',en:'Tally / Measurement',who:'CFS',
+  act:'실제 중량·용적(CBM) 계측. LCL 운임 과금 기준인 R.T(Revenue Ton) = 중량톤(MT)과 용적(CBM) 중 큰 값(W/M)으로 확정.',
+  docs:[],sys:'CFS',cut:'—',cost:'검측료',judge:'화주 신고 CBM vs 실측 차이 → 운임·정산·VGM에 직결. 이 값 틀리면 마진이 샌다.',
+  play:{h:'train.html',l:'R.T·적재를 게임으로'}},
+ {n:5,t:'적입 · 적부계획',en:'Vanning / Stowage',who:'CFS 창고팀',
+  act:'한 컨테이너 안 배치 설계: 무거운 것 아래·파손우려 위·화주별 구획 분리·위험물 격리. 여러 화주 화물을 한 박스에 적입. 적부도(stowage plan)·콘솔 리포트(내용·CBM·seal) 작성.',
+  docs:['적부도','콘솔 리포트'],sys:'—',cut:'—',cost:'적입(vanning) 작업비·라싱',judge:'무게중심·편중 방지 · 온도(냉동/냉장)·위험물 혼재 제약 · 소진율 최대화.',
+  play:{h:'train.html',l:'직접 적재해보기'}},
+ {n:6,t:'봉인',en:'Seal',who:'CFS',act:'적입 완료 후 컨테이너 봉인, seal 번호 기록·서류화.',
+  docs:[],sys:'—',cut:'—',cost:'Seal charge 약 8,000원/컨',judge:'seal 번호 = 무결성 증빙, MBL·콘솔리포트에 기재.'},
+ {n:7,t:'CY 반입',en:'Gate-in',who:'트럭킹 → 터미널(CY)',act:'봉인된 컨테이너를 터미널(CY)로 운송·반입(게이트인).',
+  docs:[],sys:'터미널',cut:'CY 컷오프(반입 마감)',cost:'Drayage(CY↔CFS 운송)·Wharfage',judge:'CY 컷 준수 = 롤오버 방지의 최후 관문.'},
+ {n:8,t:'선적 + VGM·적하목록',en:'Loading + VGM/Manifest',who:'선사 / 코로더',
+  act:'본선 적재. 사전에 VGM(검증총중량)을 선사·터미널에 제출해야 적재 가능(미제출=선적불가). 출항 적하목록은 선사·포워더가 EDI로 관세청 전송.',
+  docs:['VGM','적하목록(Manifest)'],sys:'선사 / KTNET·KL-Net → 관세청(UNI-PASS)',cut:'VGM 마감 · 적하목록(수출: 적재 24h 전, 근거리 적재 전) · Closing(선적마감)',
+  cost:'THC · BAF/CAF 등',judge:'VGM·적하목록 누락 = 선적불가·과태료. 절대 놓치면 안 됨.',
+  play:{h:'train.html',l:'중량초과·VGM 감각'}},
+ {n:9,t:'해상운송',en:'Ocean transit',who:'선사',act:'목적항까지 해상운송(대표 15~40일). 원양일수록 롤링·손상 리스크↑.',
+  docs:[],sys:'—',cut:'—',cost:'—',judge:'적재 품질(라싱·균형)이 도착 시 손상을 좌우.'},
+ {n:10,t:'도착지 적출 · 분류',en:'Devanning',who:'도착지 CFS/에이전트',
+  act:'도착지 CFS에서 컨테이너 개봉·하역, 화주별 화물 분리·손상 점검·서류 대조. LCL은 반드시 CFS에서 devanning.',
+  docs:['콘솔 리포트 대조'],sys:'도착지 CFS',cut:'—',cost:'도착지 CFS charge',judge:'손상 발견 시 기록 → HBL 조건 근거 클레임.'},
+ {n:11,t:'도착통지 → D/O → 인도',en:'A/N → D/O → Delivery',who:'선사/에이전트 → 수하인',
+  act:'Arrival Notice(도착통지) 발송 → 수하인 통관 → 운임·비용 정산 후 D/O(화물인도지시서) 수령 → CFS/CY에서 화물 인도.',
+  docs:['Arrival Notice','D/O'],sys:'선사/에이전트',cut:'—',cost:'도착지 THC·정산',judge:'D/O 소지자에게만 반출 · 비용 정산 완료 확인.'},
+];
+const DOCS=[
+ ['S/R (선적요청서)','화주→선사/포워더 · 부킹 시','shipper/consignee·품명·수량·중량·CBM·목적항·선박'],
+ ['S/O (Shipping Order)','선사 발행 · S/R 접수 후','선적 지시·선박/항차·화물명세'],
+ ['반입계 / Dock Receipt','CFS(창고) · 반입 시','반입일시·수량·상태·부킹번호'],
+ ['House B/L (HBL)','코로더/NVOCC → 실화주','Shipper=실수출자, Consignee=실수입자·화물명세·운임조건'],
+ ['Master B/L (MBL)','선사 → 코로더','Shipper=코로더, Consignee=도착지 에이전트·컨테이너·seal'],
+ ['적하목록 (Manifest)','선사(마스터)+포워더(하우스) → 관세청 EDI','수출: 적재 24h 전. 정정은 작성책임자만(MBL=선사, HBL=포워더)'],
+ ['Packing List / Invoice','화주(수출자) 작성','품목·수량·단가·금액 / 포장·중량·CBM'],
+ ['원산지증명 (C/O)','상의/세관 발급, 화주 신청','HS코드·원산지·FTA 특혜'],
+ ['위험물 신고서 (DG Decl.)','화주 선언·서명 · 선적 전','IMDG Class·UN No.·포장/표시. 정확성 책임=화주. CPIC 본선 비치'],
+ ['VGM 신고','화주 → 선사·터미널 · VGM 마감 전','컨테이너 총중량(화물+고박+자중). 방법1(계량)/방법2(합산)'],
+ ['수출신고필증(면장)','관세사 신고→세관 수리','신고번호·HS·FOB금액·수출자. 선적·영세율 근거'],
+ ['Arrival Notice (A/N)','선사/에이전트 → 수하인 · 입항 전','입항일·화물내역·비용청구'],
+ ['Delivery Order (D/O)','선사 → CFS/CY · 정산 후','인도대상·D/O 소지자 반출'],
+];
+const PARTY=[
+ ['화주 (Shipper)','화물·인보이스·패킹·C/O·DG 정보 제공, 신고 정확성 책임(특히 DG·VGM 기초).'],
+ ['포워더','화주 대리로 부킹·서류·HBL 발행·통관 연결. HBL 적하목록 정정 책임.'],
+ ['코로더 / NVOCC','선사서 박스 매입→다수 화주 혼재, HBL 발행, 부족분 조인트 콘솔. (마진의 주체)'],
+ ['CFS 운영사','반입·검량·적입·적부·봉인 / 도착지 적출·분류. 물리적 화물관리.'],
+ ['선사 (Carrier)','스페이스 제공, S/O·MBL 발행, 마스터 적하목록·본선 적재, VGM 수신, D/O 발행.'],
+ ['통관사 (관세사)','수출신고→수출신고필증, 수입통관.'],
+ ['내륙운송 (트럭킹)','공장→CFS/CY(수출), 도착지 배송(수입).'],
+ ['도착지 에이전트','MBL상 수하인, 도착지 devanning·A/N·D/O 처리.'],
+ ['수하인 (Consignee)','통관·비용정산·D/O 수령·인수.'],
+ ['관세청 / 세관','적하목록 접수, 수출입 신고 수리, 검사 지정(유니패스).'],
+];
+const SYS=[
+ ['UNI-PASS (유니패스)','관세청 전자통관 — 수출입 신고·적하목록.'],
+ ['KTNET','적하목록 중계(uLogisHub)·통합무역포털 uTradeHub 운영.'],
+ ['KL-Net','해수부 산하 해운·항만물류 중계 — 적하목록 전송망.'],
+ ['KCNET','관세청 설립 통관 중계망.'],
+ ['선사 e-부킹','코로더가 박스 단위 스페이스 부킹.'],
+ ['VGM 제출 경로','선사·터미널 시스템(또는 KL-Net 등 중계) 통해 제출.'],
+];
+const LADDER=[
+ ['CFS 반입 마감 (콘솔 컷)','주간/격주 콘솔 스케줄. 금요일 반입해도 다음 컷까지 대기 → 5~10일 추가.'],
+ ['S/I 컷 · Doc cut-off','MBL·적하목록 작성용 선적정보/서류 제출 마감.'],
+ ['VGM 마감','미제출 시 선적불가.'],
+ ['CY 컷오프 (반입 마감)','터미널 게이트 마감. 놓치면 롤오버 + 수수료 $1,000+.'],
+ ['적하목록 신고 (수출)','적재 24시간 전(근거리는 적재 전).'],
+ ['Closing time (선적 마감)','본선 적재 마감.'],
+];
+const COST=[
+ ['화주 청구 (코로더→화주)','<b>해상운임</b> R.T(=W/M) × CBM당 요율($40~180/CBM대) + <b>부대비</b>: 서류발급(B/L당 5만), Wharfage(부산 20ft 4,200/40ft 8,400원), Seal(8천/컨), THC(20ft 15~25만/40ft 21~37.5만), CFS charge(5,300~10,165원), 취급수수료($30~80/BL), 통관수수료(FOB×1.5/1000·최소 15,000), AMS $50/AFS $30. BAF·CAF·DG·냉동전기·라싱'+E+'.'],
+ ['코로더 → 선사','컨테이너(박스) 운임 + THC 등 박스 단위 비용.'],
+ ['통관·트럭킹·CFS','관세사(통관수수료)·트럭킹(공장→CFS)·CFS(반입·적입·검량 작업비).'],
+ ['마진 구조','<b>혼재 마진 = 화주 R.T 합산 청구 − 박스 원가.</b> 핵심 변수 = <b>콘솔 소진율(fill rate)</b> '+E+'. 박스를 얼마나 채우느냐가 마진을 결정.'],
+];
+const EXC=[
+ ['📦 롤오버 (선복부족/컷 초과)','다음 항차 이월 → 지연·수수료. 대응: 대체 선사·항차, 화주 통지, minimum 재조정.'],
+ ['⏱ 데머리지 (Demurrage)','컨테이너가 <b>터미널(CY) 내</b> free time(대개 3~7일) 초과 체류 시.'],
+ ['🔄 디텐션 (Detention)','컨테이너를 <b>반출 후 미반납</b> 시. 대응: 조기 통관·반출, free time 관리.'],
+ ['🔍 세관 검사 지정','exam fee($300~500+)·지연. 대응: 서류 정합성, 검사 입회.'],
+ ['⚠️ 화물 손상·클레임','devanning 시 손상 점검·기록 → HBL 조건 근거 클레임.'],
+ ['✏️ 부킹/서류 정정','건당 $50~150. 적하목록 정정은 작성책임자만(MBL=선사·HBL=포워더), 심사 후.'],
+ ['☣️ 위험물 반려','DG 신고·포장·표시 부적합 시 반입·선적 거부. 대응: IMDG 분류·CPIC·DG 신고서 사전 완비.'],
+];
+const SRC=[
+ ['LCL 혼재 가이드','https://suaidglobal.com/insights/lcl-consolidation-guide/'],
+ ['LCL 요금/R.T·부대비','https://suaidglobal.com/insights/lcl-charges-fees-explained/'],
+ ['한국 수출 부대비(KCLA)','https://www.kcla.kr/web/inc/html/4-2_2.asp'],
+ ['MBL vs HBL','https://www.tradlinx.com/blog/guide/master-b-l-마스터-비엘-mbl과-house-b-l-하우스-비엘-hbl-차이점/'],
+ ['코로더/콘솔 용어','http://m.woojingl.com/bbs/board.php?bo_table=terms&wr_id=167'],
+ ['적하목록 시한(정책브리핑)','https://www.korea.kr/news/policyNewsView.do?newsId=148706522'],
+ ['적하목록(tradlinx)','https://www.tradlinx.com/blog/guide/적하목록-cargo-manifest/'],
+ ['수출 절차·A/N·D/O','https://www.dainferry.co.kr/cargo/information2.php'],
+ ['Devanning','https://www.freightamigo.com/en/blog/logistics/what-is-devanning/'],
+ ['Delivery Order','https://www.freightamigo.com/en/blog/logistics/delivery-order/'],
+ ['SOLAS VGM','https://kr.kuehne-nagel.com/ko/-/knowledge/sea-freight/solas-vgm-regulations'],
+ ['IMDG/위험물','https://www.forwarder.kr/bbs/board.php?bo_table=menu9_1&wr_id=537'],
+ ['데머리지/디텐션','https://www.vizionapi.com/blog/defining-demurrage-and-detention-key-differences-and-implications'],
+ ['CY 컷오프','https://seafreightgo.com/what-is-cy-cut-off-shipping-meaning/'],
+ ['유니패스(관세청)','https://unipass.customs.go.kr/'],
+];
+
+document.getElementById('steps').innerHTML=STEPS.map(s=>`<div class="card" id="st${s.n}">
+  <div class="step" onclick="document.getElementById('st${s.n}').classList.toggle('open')">
+    <div class="num">${s.n}</div><div class="stitle"><b>${s.t}</b> <span class="en">${s.en}</span><div class="who">▸ ${s.who}</div></div></div>
+  <div class="sbody">
+    <div class="kv"><span class="k">행위</span><br>${s.act}</div>
+    ${s.docs.length?`<div class="kv"><span class="k">서류</span> ${s.docs.map(d=>`<span class="doc">${d}</span>`).join('')}</div>`:''}
+    <div class="kv"><span class="k">전산</span> ${s.sys} · <span class="k">마감</span> ${s.cut} · <span class="k">비용</span> ${s.cost}</div>
+    <div class="kv"><span class="k">판단 포인트</span> ${s.judge}</div>
+    ${s.play?`<a class="playl" href="${s.play.h}">🎮 ${s.play.l}</a>`:''}
+  </div></div>`).join('');
+document.getElementById('docsT').innerHTML=DOCS.map(d=>`<tr><td><b>${d[0]}</b></td><td>${d[1]}</td><td>${d[2]}</td></tr>`).join('');
+document.getElementById('party').innerHTML=PARTY.map(p=>`<div class="box"><b>${p[0]}</b><br><span class="muted">${p[1]}</span></div>`).join('');
+document.getElementById('sys').innerHTML=SYS.map(s=>`<div style="padding:5px 0;border-bottom:1px solid #1c2634"><b style="color:#cfe4ff">${s[0]}</b> — ${s[1]}</div>`).join('');
+document.getElementById('ladder').innerHTML=LADDER.map((l,i)=>`<li><b>${i+1}. ${l[0]}</b><br><span class="muted">${l[1]}</span></li>`).join('')+`<li class="warn">↳ 하나라도 놓치면 → 롤오버(다음 배). 리드타임 지연 + 재작업비.</li>`;
+document.getElementById('cost').innerHTML=COST.map(c=>`<div class="box"><b>${c[0]}</b><br><span style="font-size:12px">${c[1]}</span></div>`).join('');
+document.getElementById('exc').innerHTML=EXC.map(e=>`<div class="box" style="margin:7px 0">${e[0]} — ${e[1]}</div>`).join('');
+document.getElementById('src').innerHTML=SRC.map(s=>`<a href="${s[1]}" target="_blank">${s[0]}</a>`).join(' · ');
+</script>
+</body>
+</html>
