@@ -120,7 +120,9 @@ function renderReport(sub, you, model, ms){
     </table>
     <div style="font-size:15px;margin-top:6px">${win?'<span class="win">🏆 모범답안 이상! 훌륭합니다.</span>':`모범 대비 <b class="neg">${ms.expMargin-you.expMargin}만</b> 부족`}</div>
     <button class="btn" onclick="replayModel()">📺 모범 답안 리플레이</button>
+    <button class="btn" style="background:#3a4657" onclick="shareResult()">🔗 결과 공유</button>
     <button class="btn alt" onclick="retry()">↻ 다시 풀기</button></div>`;
+  lastReport={you, ms, caseObj:curCase, win};
   // 학습 피드백 (벌금·실수 원인)
   html+=`<div class="card"><b>💡 학습 피드백</b>`;
   const fbs=[];
@@ -137,6 +139,14 @@ function renderReport(sub, you, model, ms){
   document.getElementById('report').innerHTML=html;
 }
 function replayModel(){ if(lastModel&&ready()) game().wsReplayLayout(lastModel); }
+let lastReport=null;
+window.shareResult=()=>{ if(!lastReport) return; const r=lastReport;
+  const lane=(r.caseObj.subj.match(/부산→[^ )]+/)||['이 건'])[0];
+  const url=location.origin+location.pathname.replace(/train\.html$/,'academy.html');
+  const text=`[방과후 콘솔 아카데미] ${lane} 적재 — AI(모범 ${r.ms.expMargin}만)에 도전! 내 기대 마진 ${r.you.expMargin}만${r.win?' — AI를 이겼다! 🏆':''}`;
+  if(navigator.share){ navigator.share({title:'나 vs AI', text, url}).catch(()=>{}); }
+  else if(navigator.clipboard){ navigator.clipboard.writeText(text+'\n'+url).then(()=>alert('결과가 복사됐어요:\n'+text), ()=>prompt('복사하세요:', text+'\n'+url)); }
+  else prompt('복사하세요:', text+'\n'+url); };
 
 // 로컬 리더보드(여러 명 제출 누적)
 function saveLB(idx,name,you){ const key='train_lb_'+idx; let a; try{a=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){a=[];}

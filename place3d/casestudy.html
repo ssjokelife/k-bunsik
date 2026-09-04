@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>📚 콘솔사 사례 학습 — 실제 사고로 배우는 물류</title>
+<meta name="description" content="실제 컨테이너선 사고와 국제규정을 케이스로 배우는 물류 실무 교육. 조사보고서 기반.">
+<meta property="og:title" content="실제 컨테이너선 사고로 배우는 물류 — 사례 학습">
+<meta property="og:description" content="머스크 호남 화재, MSC 나폴리 과적, ONE Apus 유실… 실제 사고로 배우는 물류 실무.">
+<meta property="og:image" content="og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="og.png">
 <style>
   *{box-sizing:border-box;} body{margin:0;background:#0f141c;color:#e6ecf3;font-family:'Malgun Gothic','Segoe UI',sans-serif;line-height:1.6;}
   .wrap{max-width:900px;margin:0 auto;padding:20px 16px 60px;}
@@ -217,6 +223,7 @@ function renderList(){
           </div>
           <div class="src">출처: ${c.src.map(s=>`<a href="${s[1]}" target="_blank">${s[0]}</a>`).join(' · ')}</div>
           ${c.play?`<a class="play" href="train.html?case=${c.play.case}">🎮 ${c.play.label} — 교육 콘솔에서 체험</a>`:''}
+          <button class="btn" style="background:#3a4657;margin-left:6px" onclick="shareCase('${c.id}')">🔗 이 사례 공유</button>
         </div>
       </div></div>`;
   }).join('');
@@ -231,6 +238,11 @@ window.selfEval=(id)=>{ const c=CASES.find(x=>x.id===id); const checked=[];
   document.getElementById('rbres_'+id).innerHTML=` → 핵심 근거 <b style="color:${n===tot?'#6bd08a':'#e0b070'}">${n}/${tot}</b> 짚음${n===tot?' 🎯 완벽':''}`;
 };
 window.toggle=id=>{ document.getElementById('card_'+id).classList.toggle('open'); };
+window.shareCase=(id)=>{ const c=CASES.find(x=>x.id===id); const url=location.origin+location.pathname+'?open='+id;
+  const text=`[실제 사고로 배우는 물류] ${c.title}`;
+  if(navigator.share){ navigator.share({title:c.title, text, url}).catch(()=>{}); }
+  else if(navigator.clipboard){ navigator.clipboard.writeText(text+'\n'+url).then(()=>alert('링크가 복사됐어요:\n'+url), ()=>prompt('링크를 복사하세요:', url)); }
+  else prompt('링크를 복사하세요:', url); };
 window.answer=(id,pick)=>{ const c=CASES.find(x=>x.id===id); const correct=!!c.opts[pick].c;
   const p=prog(); if(p[id]===undefined){ p[id]={pick,correct}; save(p); }
   markAnswered(id,pick,true); scoreBar();
